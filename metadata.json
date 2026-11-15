@@ -1,0 +1,6 @@
+{
+  "name": "Mechatronik & Fluidik Baukasten",
+  "description": "Modulare, webbasierte elektromechanische und fluidische Baukasten-Simulation mit Echtzeit- und Zeitraffer-Steuerung.",
+  "requestFramePermissions": [],
+  "majorCapabilities": []
+}
