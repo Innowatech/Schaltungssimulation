@@ -5,9 +5,18 @@ export interface ChangelogEntry {
   changes: string[];
 }
 
-export const CURRENT_VERSION = '1.6';
+export const CURRENT_VERSION = '1.7';
 
 export const CHANGELOG_ENTRIES: ChangelogEntry[] = [
+  {
+    version: '1.7',
+    title: 'GitHub Actions Peer-Dependency-Fix',
+    date: '2026-11-17',
+    changes: [
+      'npm install --legacy-peer-deps im GitHub Pages Workflow ergänzt, um den optionalen esbuild/vite8 Peer-Konflikt zu lösen.',
+      'vite.config.ts auf modernes import.meta.dirname umgestellt.',
+    ],
+  },
   {
     version: '1.6',
     title: 'GitHub Actions Build-Fix (ohne package-lock.json)',

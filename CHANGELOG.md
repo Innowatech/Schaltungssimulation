@@ -1,8 +1,13 @@
 # Changelog — Mechatronik & Fluidik Baukasten
 
-Alle Änderungen an diesem Projekt werden fortlaufend mit den Versionsnummern `1.0`, `1.1`, `1.2`, `1.3`, `1.4`, `1.5`, `1.6` usw. dokumentiert.
+Alle Änderungen an diesem Projekt werden fortlaufend mit den Versionsnummern `1.0`, `1.1`, `1.2`, `1.3`, `1.4`, `1.5`, `1.6`, `1.7` usw. dokumentiert.
 
-## [1.6] — Aktuelle Version
+## [1.7] — Aktuelle Version
+### Behoben
+- **GitHub Actions `ERESOLVE`-Fehler**: `npm install --legacy-peer-deps` in `.github/workflows/deploy.yml` ergänzt, um den optionalen Peer-Dependency-Konflikt zwischen `vite@8` und `esbuild@0.25` sauber aufzulösen.
+- **Vite 8 Config**: `__dirname` in `vite.config.ts` auf `import.meta.dirname` umgestellt.
+
+## [1.6]
 ### Behoben
 - **GitHub Actions Build**: `cache: npm` und hartes `npm ci` in `.github/workflows/deploy.yml` durch automatische Lockfile-Prüfung (`npm ci` falls `package-lock.json` vorhanden, sonst `npm install`) ersetzt, damit der Build auch ohne `package-lock.json` sauber durchläuft.
 
