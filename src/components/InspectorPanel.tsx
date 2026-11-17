@@ -24,6 +24,7 @@ import {
   SignalTransmitterComponent,
   TransmitterMode,
 } from '../engine/components/SignalAndLogic';
+import { TerminalBlockComponent } from '../engine/components/TerminalBlock';
 import {
   AnalogSignal,
   ComponentFaultType,
@@ -124,7 +125,7 @@ export const InspectorPanel: React.FC<InspectorPanelProps> = ({
   // Fehler-Diagnose-Ansicht
   if (showFaultPanel) {
     return (
-      <aside className="w-76 bg-[#0E1522] border-l border-[#223044] flex flex-col shrink-0 overflow-hidden">
+      <aside className="w-76 bg-[#0E1522] border-l border-[#223044] flex flex-col shrink-0 overflow-hidden max-md:fixed max-md:inset-y-14 max-md:right-0 max-md:z-40 max-md:shadow-2xl">
         {renderPanelTabs()}
 
         <div className="p-4 border-b border-[#223044] space-y-2">
@@ -249,7 +250,7 @@ export const InspectorPanel: React.FC<InspectorPanelProps> = ({
     const connFault: ConnectionFaultType = selectedConnection.fault ?? 'none';
 
     return (
-      <aside className="w-76 bg-[#0E1522] border-l border-[#223044] flex flex-col shrink-0 overflow-hidden">
+      <aside className="w-76 bg-[#0E1522] border-l border-[#223044] flex flex-col shrink-0 overflow-hidden max-md:fixed max-md:inset-y-14 max-md:right-0 max-md:z-40 max-md:shadow-2xl">
         {renderPanelTabs()}
 
         <div className="px-4 py-2.5 border-b border-[#223044]">
@@ -310,7 +311,6 @@ export const InspectorPanel: React.FC<InspectorPanelProps> = ({
             )}
           </div>
 
-          {/* Gezielte Fehlersimulation für Leitung */}
           <div className="border-t border-[#223044] pt-4 space-y-2">
             <h3 className="text-[11px] font-semibold text-slate-400">
               Gezielter Leitungsfehler
@@ -382,7 +382,7 @@ export const InspectorPanel: React.FC<InspectorPanelProps> = ({
     const supportedFaults = selectedComponent.getSupportedFaults();
 
     return (
-      <aside className="w-76 bg-[#0E1522] border-l border-[#223044] flex flex-col shrink-0 overflow-hidden">
+      <aside className="w-76 bg-[#0E1522] border-l border-[#223044] flex flex-col shrink-0 overflow-hidden max-md:fixed max-md:inset-y-14 max-md:right-0 max-md:z-40 max-md:shadow-2xl">
         {renderPanelTabs()}
 
         <div className="px-4 py-2.5 border-b border-[#223044] flex items-center justify-between gap-2">
@@ -426,6 +426,29 @@ export const InspectorPanel: React.FC<InspectorPanelProps> = ({
                 >
                   {selectedComponent.params.enabled ? 'EIN (24V)' : 'AUS (0V)'}
                 </button>
+              </div>
+            </div>
+          )}
+
+          {selectedComponent instanceof TerminalBlockComponent && (
+            <div className="space-y-3 border-t border-[#223044] pt-4">
+              <div>
+                <label className="block text-[11px] text-slate-400 mb-1">
+                  Anzahl Ausgänge (Igel-Klemmen)
+                </label>
+                <select
+                  value={Number(selectedComponent.params.outputCount ?? 10)}
+                  onChange={(e) => {
+                    selectedComponent.params.outputCount = Number(e.target.value);
+                    onMutate();
+                  }}
+                  className="w-full bg-[#0B111A] border border-[#243247] rounded-md px-2.5 py-1.5 text-slate-100 focus:outline-none focus:border-sky-500 cursor-pointer"
+                >
+                  <option value={5}>5 Ausgänge</option>
+                  <option value={10}>10 Ausgänge</option>
+                  <option value={15}>15 Ausgänge</option>
+                  <option value={20}>20 Ausgänge</option>
+                </select>
               </div>
             </div>
           )}
@@ -622,105 +645,96 @@ export const InspectorPanel: React.FC<InspectorPanelProps> = ({
 
               <div>
                 <label className="block text-[11px] text-slate-400 mb-1">
-                  Startfüllstand bei Reset (%)
-                </label>
-                <input
-                  type="number"
-                  min={0}
-                  max={100}
-                  value={Number(selectedComponent.params.initialLevelPct ?? 30)}
-                  onChange={(e) => {
-                    selectedComponent.params.initialLevelPct = Math.max(
-                      0,
-                      Math.min(100, Number(e.target.value))
-                    );
-                    onMutate();
-                  }}
-                  className="w-full bg-[#0B111A] border border-[#243247] rounded-md px-2.5 py-1.5 font-mono text-slate-100 focus:outline-none focus:border-sky-500"
-                />
-              </div>
-            </div>
-          )}
-
-          {selectedComponent instanceof FloatProbeComponent && (
-            <div className="space-y-3 border-t border-[#223044] pt-4">
-              <div>
-                <label className="block text-[11px] text-slate-400 mb-1">
-                  Zugeordneter Tank
+                  Schwimmerlanze (Schaltpunkte)
                 </label>
                 <select
-                  value={String(selectedComponent.params.tankId ?? '')}
+                  value={String(selectedComponent.params.probeMode ?? '3_points')}
                   onChange={(e) => {
-                    selectedComponent.params.tankId = e.target.value;
+                    selectedComponent.params.probeMode = e.target.value as '3_points' | '5_points';
                     onMutate();
                   }}
                   className="w-full bg-[#0B111A] border border-[#243247] rounded-md px-2.5 py-1.5 text-slate-100 focus:outline-none focus:border-sky-500 cursor-pointer"
                 >
-                  <option value="">— Tank auswählen —</option>
-                  {tanks.map((tank) => (
-                    <option key={tank.id} value={tank.id}>
-                      {tank.label} ({tank.getCapacity()} L)
-                    </option>
-                  ))}
+                  <option value="3_points">3 Schaltpunkte (Trocken, Min NO, Max NC)</option>
+                  <option value="5_points">5 Schaltpunkte (Trocken, Vorleer, Min, Max, Überlauf)</option>
                 </select>
               </div>
 
               <div className="grid grid-cols-2 gap-2">
                 <div>
-                  <label className="block text-[11px] text-slate-400 mb-1">
-                    Min-Level (%)
-                  </label>
+                  <label className="block text-[10px] text-slate-400 mb-0.5">Trockenlauf (%)</label>
                   <input
                     type="number"
                     min={0}
-                    max={99}
-                    value={Number(selectedComponent.params.minPercent ?? 20)}
+                    max={100}
+                    value={Number(selectedComponent.params.dryPct ?? 10)}
                     onChange={(e) => {
-                      selectedComponent.params.minPercent = Math.max(
-                        0,
-                        Math.min(99, Number(e.target.value))
-                      );
+                      selectedComponent.params.dryPct = Number(e.target.value);
                       onMutate();
                     }}
-                    className="w-full bg-[#0B111A] border border-[#243247] rounded-md px-2.5 py-1.5 font-mono text-slate-100 focus:outline-none focus:border-sky-500"
+                    className="w-full bg-[#0B111A] border border-[#243247] rounded px-2 py-1 font-mono text-xs text-slate-100"
                   />
                 </div>
                 <div>
-                  <label className="block text-[11px] text-slate-400 mb-1">
-                    Max-Level (%)
-                  </label>
+                  <label className="block text-[10px] text-slate-400 mb-0.5">Min (%)</label>
                   <input
                     type="number"
-                    min={1}
+                    min={0}
                     max={100}
-                    value={Number(selectedComponent.params.maxPercent ?? 85)}
+                    value={Number(selectedComponent.params.minPct ?? 40)}
                     onChange={(e) => {
-                      selectedComponent.params.maxPercent = Math.max(
-                        1,
-                        Math.min(100, Number(e.target.value))
-                      );
+                      selectedComponent.params.minPct = Number(e.target.value);
                       onMutate();
                     }}
-                    className="w-full bg-[#0B111A] border border-[#243247] rounded-md px-2.5 py-1.5 font-mono text-slate-100 focus:outline-none focus:border-sky-500"
+                    className="w-full bg-[#0B111A] border border-[#243247] rounded px-2 py-1 font-mono text-xs text-slate-100"
                   />
                 </div>
-              </div>
-
-              <div>
-                <label className="block text-[11px] text-slate-400 mb-1">
-                  Sensor-Versorgung
-                </label>
-                <select
-                  value={String(selectedComponent.params.supplyMode ?? 'external')}
-                  onChange={(e) => {
-                    selectedComponent.params.supplyMode = e.target.value;
-                    onMutate();
-                  }}
-                  className="w-full bg-[#0B111A] border border-[#243247] rounded-md px-2.5 py-1.5 text-slate-100 focus:outline-none focus:border-sky-500 cursor-pointer"
-                >
-                  <option value="external">Über Klemme +24V</option>
-                  <option value="internal">Interne 24V (autark)</option>
-                </select>
+                <div>
+                  <label className="block text-[10px] text-slate-400 mb-0.5">Max (%)</label>
+                  <input
+                    type="number"
+                    min={0}
+                    max={100}
+                    value={Number(selectedComponent.params.maxPct ?? 80)}
+                    onChange={(e) => {
+                      selectedComponent.params.maxPct = Number(e.target.value);
+                      onMutate();
+                    }}
+                    className="w-full bg-[#0B111A] border border-[#243247] rounded px-2 py-1 font-mono text-xs text-slate-100"
+                  />
+                </div>
+                {String(selectedComponent.params.probeMode ?? '3_points') === '5_points' && (
+                  <>
+                    <div>
+                      <label className="block text-[10px] text-slate-400 mb-0.5">Vorleer (%)</label>
+                      <input
+                        type="number"
+                        min={0}
+                        max={100}
+                        value={Number(selectedComponent.params.preLowPct ?? 25)}
+                        onChange={(e) => {
+                          selectedComponent.params.preLowPct = Number(e.target.value);
+                          onMutate();
+                        }}
+                        className="w-full bg-[#0B111A] border border-[#243247] rounded px-2 py-1 font-mono text-xs text-slate-100"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-[10px] text-slate-400 mb-0.5">Überlauf (%)</label>
+                      <input
+                        type="number"
+                        min={0}
+                        max={100}
+                        value={Number(selectedComponent.params.overflowPct ?? 95)}
+                        onChange={(e) => {
+                          selectedComponent.params.overflowPct = Number(e.target.value);
+                          onMutate();
+                        }}
+                        className="w-full bg-[#0B111A] border border-[#243247] rounded px-2 py-1 font-mono text-xs text-slate-100"
+                      />
+                    </div>
+                  </>
+                )}
               </div>
             </div>
           )}
@@ -816,7 +830,6 @@ export const InspectorPanel: React.FC<InspectorPanelProps> = ({
             </div>
           )}
 
-          {/* Gezielte Fehlersimulation am Bauteil */}
           {supportedFaults.length > 0 && (
             <div className="border-t border-[#223044] pt-4 space-y-2">
               <h3 className="text-[11px] font-semibold text-slate-400">
@@ -852,7 +865,6 @@ export const InspectorPanel: React.FC<InspectorPanelProps> = ({
             </div>
           )}
 
-          {/* Live Klemmen-Diagnose */}
           <div className="border-t border-[#223044] pt-4">
             <h3 className="text-[11px] font-semibold text-slate-400 mb-2">
               Klemmen-Status (Live)
@@ -928,7 +940,7 @@ export const InspectorPanel: React.FC<InspectorPanelProps> = ({
   ).length;
 
   return (
-    <aside className="w-76 bg-[#0E1522] border-l border-[#223044] flex flex-col shrink-0 overflow-hidden">
+    <aside className="w-76 bg-[#0E1522] border-l border-[#223044] flex flex-col shrink-0 overflow-hidden max-md:fixed max-md:inset-y-14 max-md:right-0 max-md:z-40 max-md:shadow-2xl">
       {renderPanelTabs()}
 
       <div className="px-4 py-2.5 border-b border-[#223044]">

@@ -3,6 +3,7 @@ import { PanelLeftOpen, PanelRightOpen } from 'lucide-react';
 import { ChangelogModal } from './components/ChangelogModal';
 import { ComponentLibrary } from './components/ComponentLibrary';
 import { InspectorPanel } from './components/InspectorPanel';
+import { OfflineIndicator } from './components/OfflineIndicator';
 import { TopControlBar } from './components/TopControlBar';
 import { WorkbenchCanvas } from './components/WorkbenchCanvas';
 import { ComponentRegistry } from './engine/ComponentRegistry';
@@ -25,8 +26,12 @@ export default function App() {
   const [selectedComponentId, setSelectedComponentId] = useState<string | null>(null);
   const [selectedConnectionId, setSelectedConnectionId] = useState<string | null>(null);
   const [showFaultPanel, setShowFaultPanel] = useState<boolean>(false);
-  const [showLibrary, setShowLibrary] = useState<boolean>(true);
-  const [showInspector, setShowInspector] = useState<boolean>(true);
+  const [showLibrary, setShowLibrary] = useState<boolean>(() =>
+    typeof window !== 'undefined' ? window.innerWidth >= 768 : true
+  );
+  const [showInspector, setShowInspector] = useState<boolean>(() =>
+    typeof window !== 'undefined' ? window.innerWidth >= 1024 : true
+  );
   const [showChangelog, setShowChangelog] = useState<boolean>(false);
   const [pan, setPan] = useState<{ x: number; y: number }>({ x: 24, y: 24 });
   const [zoom, setZoom] = useState<number>(0.88);
@@ -321,7 +326,7 @@ export default function App() {
   );
 
   return (
-    <div className="h-screen w-screen flex flex-col bg-[#0B111A] text-slate-100 overflow-hidden">
+    <div className="h-dvh w-screen flex flex-col bg-[#0B111A] text-slate-100 overflow-hidden">
       <TopControlBar
         isRunning={isRunning}
         onToggleRun={() => setIsRunning((r) => !r)}
@@ -437,6 +442,7 @@ export default function App() {
           {toastMessage}
         </div>
       )}
+      <OfflineIndicator />
       <ChangelogModal
         isOpen={showChangelog}
         onClose={() => setShowChangelog(false)}

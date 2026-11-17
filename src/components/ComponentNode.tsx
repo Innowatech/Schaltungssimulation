@@ -15,6 +15,7 @@ import {
   LogicGateComponent,
   SignalTransmitterComponent,
 } from '../engine/components/SignalAndLogic';
+import { TerminalBlockComponent } from '../engine/components/TerminalBlock';
 import { AnalogSignal, ComponentFaultType, ElectricalSignal, PortDefinition, PortDomain } from '../engine/types';
 
 export interface PendingWireStart {
@@ -120,7 +121,30 @@ export const ComponentNode: React.FC<ComponentNodeProps> = ({
       );
     }
 
-    // 2. Taster / Schalter
+    // 2. Klemmblock (Igel)
+    if (component instanceof TerminalBlockComponent) {
+      const count = component.getOutputCount();
+      const energized = Boolean(component.runtimeState.inputEnergized);
+      return (
+        <div className="px-3 py-2 flex flex-col justify-between h-[calc(100%-28px)] text-[11px]">
+          <div className="flex items-center justify-between bg-[#0B111A] border border-[#1E2A3B] rounded px-2.5 py-1.5">
+            <span className="text-slate-400">24V Potential</span>
+            <span
+              className={`font-mono font-semibold ${
+                energized ? 'text-red-400' : 'text-slate-500'
+              }`}
+            >
+              {energized ? '24V AKTIV' : '0V'}
+            </span>
+          </div>
+          <div className="text-[10px] text-slate-400 text-center">
+            {count} Ausgänge (Igel-Layout)
+          </div>
+        </div>
+      );
+    }
+
+    // 3. Taster / Schalter
     if (component instanceof SwitchComponent) {
       const mode = String(component.params.mode ?? 'toggle');
       const closed = component.isContactClosed();
@@ -210,7 +234,7 @@ export const ComponentNode: React.FC<ComponentNodeProps> = ({
       );
     }
 
-    // 3. Zeitrelais
+    // 4. Zeitrelais
     if (component instanceof TimerRelayComponent) {
       const mode = String(component.params.mode ?? 'on_delay');
       const val = Number(component.params.durationValue ?? 5);
@@ -266,7 +290,7 @@ export const ComponentNode: React.FC<ComponentNodeProps> = ({
       );
     }
 
-    // 4. Hilfsrelais / Schütz
+    // 5. Hilfsrelais / Schütz
     if (component instanceof ContactorRelayComponent) {
       const coilOn = Boolean(component.runtimeState.coilEnergized);
       return (
@@ -300,7 +324,7 @@ export const ComponentNode: React.FC<ComponentNodeProps> = ({
       );
     }
 
-    // 5. Stromwandler
+    // 6. Stromwandler
     if (component instanceof CurrentTransformerComponent) {
       const amps = Number(component.runtimeState.measuredAmps ?? 0);
       const aVal = Number(component.runtimeState.analogValue ?? 4);
@@ -338,7 +362,7 @@ export const ComponentNode: React.FC<ComponentNodeProps> = ({
       );
     }
 
-    // 6. Messumformer
+    // 7. Messumformer
     if (component instanceof SignalTransmitterComponent) {
       const mode = String(component.params.conversionMode ?? 'v10_to_ma');
       const inVal = Number(component.runtimeState.inputValue ?? 0);
@@ -411,7 +435,7 @@ export const ComponentNode: React.FC<ComponentNodeProps> = ({
       );
     }
 
-    // 7. Logikgatter (AND / OR / NOT)
+    // 8. Logikgatter (AND / OR / NOT)
     if (component instanceof LogicGateComponent) {
       const in1 = Boolean(component.runtimeState.in1);
       const in2 = Boolean(component.runtimeState.in2);
@@ -442,7 +466,7 @@ export const ComponentNode: React.FC<ComponentNodeProps> = ({
       );
     }
 
-    // 8. Tank mit animiertem Füllstand & manuellem Slider
+    // 9. Tank mit integrierter Schwimmerlanze
     if (component instanceof TankComponent) {
       const cap = component.getCapacity();
       const liters = component.getLevelLiters();
@@ -516,13 +540,19 @@ export const ComponentNode: React.FC<ComponentNodeProps> = ({
       );
     }
 
-    // 9. Schwimmerlanze
+    // 10. Schwimmerlanze (Separat)
     if (component instanceof FloatProbeComponent) {
       const tankId = String(component.params.tankId ?? '');
       const linkedTank = allComponents.find((c) => c.id === tankId) as TankComponent | undefined;
       const minPct = Number(component.params.minPercent ?? 20);
       const maxPct = Number(component.params.maxPercent ?? 85);
-      const levelPct = component.runtimeState.tankLevelPct as number | null;
+      const rawLevel =
+        typeof component.runtimeState.tankLevelPct === 'number'
+          ? component.runtimeState.tankLevelPct
+          : linkedTank
+          ? linkedTank.getLevelPercent()
+          : Number(component.params.levelPct ?? 50);
+      const levelPct = Number.isFinite(rawLevel) ? rawLevel : 50;
       const minActive = Boolean(component.runtimeState.minTriggered);
       const maxActive = Boolean(component.runtimeState.maxTriggered);
       const powered = Boolean(component.runtimeState.powered);
@@ -581,7 +611,7 @@ export const ComponentNode: React.FC<ComponentNodeProps> = ({
       );
     }
 
-    // 10. Erzeuger-Anlage
+    // 11. Erzeuger-Anlage
     if (component instanceof GeneratorComponent) {
       const status = String(component.runtimeState.status ?? 'standby');
       const actualFlow = Number(component.runtimeState.actualFlowLph ?? 0);
@@ -649,7 +679,7 @@ export const ComponentNode: React.FC<ComponentNodeProps> = ({
       );
     }
 
-    // 11. 3/2-Wege-Magnetventil
+    // 12. 3/2-Wege-Magnetventil
     if (component instanceof SolenoidValve32Component) {
       const energized = Boolean(component.runtimeState.coilEnergized);
       const pathB = component.runtimeState.activePath === 'P->B';
@@ -697,7 +727,7 @@ export const ComponentNode: React.FC<ComponentNodeProps> = ({
       );
     }
 
-    // 12. 2/2-Wege-Magnetventil
+    // 13. 2/2-Wege-Magnetventil
     if (component instanceof SolenoidValve22Component) {
       const energized = Boolean(component.runtimeState.coilEnergized);
       const isOpen = Boolean(component.runtimeState.isOpen);
@@ -743,7 +773,7 @@ export const ComponentNode: React.FC<ComponentNodeProps> = ({
       );
     }
 
-    // 13. Ablassventil / Verbraucher
+    // 14. Ablassventil / Verbraucher
     if (component instanceof DrainConsumerComponent) {
       const isOpen = component.isOpen();
       const actualFlow = Number(component.runtimeState.actualFlowLph ?? 0);
@@ -821,7 +851,6 @@ export const ComponentNode: React.FC<ComponentNodeProps> = ({
           : 'border-[#26364D] hover:border-[#3A5173] z-10'
       }`}
     >
-      {/* Komponententitel */}
       <div
         className={`h-7 px-2.5 border-b rounded-t-lg flex items-center justify-between gap-2 ${
           hasFault
@@ -853,7 +882,6 @@ export const ComponentNode: React.FC<ComponentNodeProps> = ({
 
       {renderBody()}
 
-      {/* Elektrische, Analoge & Fluidische Anschlussklemmen */}
       {ports.map((port) => {
         const sig = component.portSignals.get(port.id);
         const isElecActive =

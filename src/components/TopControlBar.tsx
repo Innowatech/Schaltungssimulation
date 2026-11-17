@@ -14,6 +14,7 @@ import {
 } from 'lucide-react';
 import { CURRENT_VERSION } from '../changelog';
 import { CIRCUIT_PRESETS } from '../engine/presets';
+import { PWAInstallButton } from './PWAInstallButton';
 
 interface TopControlBarProps {
   isRunning: boolean;
@@ -292,6 +293,8 @@ export const TopControlBar: React.FC<TopControlBarProps> = ({
           <Upload className="w-3.5 h-3.5 text-sky-400" />
           <span>Laden</span>
         </button>
+
+        <PWAInstallButton />
 
         <button
           type="button"

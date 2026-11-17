@@ -1,5 +1,5 @@
-import React from 'react';
-import { PanelLeftClose, Plus } from 'lucide-react';
+import React, { useState } from 'react';
+import { PanelLeftClose, Plus, Search } from 'lucide-react';
 import { ComponentRegistry } from '../engine/ComponentRegistry';
 import { ComponentCategory, ComponentMetadata } from '../engine/types';
 
@@ -32,6 +32,16 @@ function renderMiniSchematic(type: string): React.ReactNode {
           <text x="18" y="17" textAnchor="middle" fill="#F87171" fontSize="9" fontFamily="monospace" fontWeight="600">
             24V
           </text>
+        </svg>
+      );
+    case 'terminal_block':
+      return (
+        <svg viewBox="0 0 36 28" className="w-9 h-7 shrink-0">
+          <rect x="6" y="5" width="24" height="18" rx="2" fill="#162133" stroke="#F59E0B" strokeWidth="1.4" />
+          <line x1="2" y1="14" x2="6" y2="14" stroke="#EF4444" strokeWidth="1.5" />
+          <line x1="30" y1="9" x2="34" y2="9" stroke="#EF4444" strokeWidth="1.2" />
+          <line x1="30" y1="14" x2="34" y2="14" stroke="#EF4444" strokeWidth="1.2" />
+          <line x1="30" y1="19" x2="34" y2="19" stroke="#EF4444" strokeWidth="1.2" />
         </svg>
       );
     case 'switch':
@@ -161,6 +171,7 @@ export const ComponentLibrary: React.FC<ComponentLibraryProps> = ({
   onQuickAdd,
   onCollapse,
 }) => {
+  const [searchTerm, setSearchTerm] = useState('');
   const allEntries = ComponentRegistry.getAll();
 
   const handleDragStart = (e: React.DragEvent, meta: ComponentMetadata) => {
@@ -168,33 +179,55 @@ export const ComponentLibrary: React.FC<ComponentLibraryProps> = ({
     e.dataTransfer.effectAllowed = 'copy';
   };
 
+  const filteredEntries = allEntries.filter(
+    ({ meta }) =>
+      meta.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      meta.shortDescription.toLowerCase().includes(searchTerm.toLowerCase())
+  );
+
   return (
-    <aside className="w-64 bg-[#0E1522] border-r border-[#223044] flex flex-col shrink-0 select-none overflow-hidden">
-      <div className="px-4 py-3 border-b border-[#223044] flex items-start justify-between gap-2">
-        <div className="min-w-0">
-          <h2 className="text-xs font-semibold text-slate-200 tracking-wide">
-            Bauteil-Bibliothek
-          </h2>
-          <p className="text-[11px] text-slate-400 mt-0.5">
-            Auf Fläche ziehen oder + klicken
-          </p>
+    <aside className="w-64 bg-[#0E1522] border-r border-[#223044] flex flex-col shrink-0 select-none overflow-hidden max-md:fixed max-md:inset-y-14 max-md:left-0 max-md:z-40 max-md:shadow-2xl">
+      <div className="px-4 py-3 border-b border-[#223044] space-y-2.5">
+        <div className="flex items-start justify-between gap-2">
+          <div className="min-w-0">
+            <h2 className="text-xs font-semibold text-slate-200 tracking-wide">
+              Bauteil-Bibliothek
+            </h2>
+            <p className="text-[11px] text-slate-400 mt-0.5">
+              Auf Fläche ziehen oder + klicken
+            </p>
+          </div>
+          <button
+            type="button"
+            onClick={onCollapse}
+            title="Bauteil-Bibliothek ausblenden"
+            aria-label="Bauteil-Bibliothek ausblenden"
+            className="p-1 rounded text-slate-400 hover:text-white hover:bg-[#19263B] transition-colors cursor-pointer shrink-0"
+          >
+            <PanelLeftClose className="w-4 h-4" />
+          </button>
         </div>
-        <button
-          type="button"
-          onClick={onCollapse}
-          title="Bauteil-Bibliothek ausblenden"
-          aria-label="Bauteil-Bibliothek ausblenden"
-          className="p-1 rounded text-slate-400 hover:text-white hover:bg-[#19263B] transition-colors cursor-pointer shrink-0"
-        >
-          <PanelLeftClose className="w-4 h-4" />
-        </button>
+
+        {/* Bauteil-Schnellsuche */}
+        <div className="relative">
+          <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-slate-400" />
+          <input
+            type="text"
+            placeholder="Bauteile durchsuchen..."
+            value={searchTerm}
+            onChange={(e) => setSearchTerm(e.target.value)}
+            className="w-full bg-[#0B111A] border border-[#243247] rounded-md pl-8 pr-2.5 py-1.5 text-xs text-slate-100 placeholder:text-slate-500 focus:outline-none focus:border-sky-500"
+          />
+        </div>
       </div>
 
       <div className="flex-1 overflow-y-auto px-3 py-3 space-y-5">
         {CATEGORY_GROUPS.map((group) => {
-          const items = allEntries.filter((e) =>
+          const items = filteredEntries.filter((e) =>
             group.categories.includes(e.meta.category)
           );
+          if (items.length === 0) return null;
+
           return (
             <section key={group.title}>
               <h3 className="text-[11px] font-semibold text-slate-400 px-1 mb-2">

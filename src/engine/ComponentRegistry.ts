@@ -14,6 +14,7 @@ import {
   LogicGateComponent,
   SignalTransmitterComponent,
 } from './components/SignalAndLogic';
+import { TerminalBlockComponent } from './components/TerminalBlock';
 import { ComponentMetadata, SerializedComponent } from './types';
 
 export type ComponentFactory = (id: string, label: string, x: number, y: number) => SimComponent;
@@ -75,6 +76,19 @@ ComponentRegistry.register(
     defaultLabelPrefix: 'G1 24V DC',
   },
   (id, label, x, y) => new PowerSupply24V(id, label, x, y)
+);
+
+ComponentRegistry.register(
+  {
+    type: 'terminal_block',
+    name: '24V Klemmblock (Igel)',
+    shortDescription: 'Modular erweiterbarer Potentialverteiler (5, 10, 15, 20 Ausgänge)',
+    category: 'electric',
+    width: 210,
+    height: 180,
+    defaultLabelPrefix: 'X1 Klemmblock',
+  },
+  (id, label, x, y) => new TerminalBlockComponent(id, label, x, y)
 );
 
 ComponentRegistry.register(
@@ -186,11 +200,11 @@ ComponentRegistry.register(
 ComponentRegistry.register(
   {
     type: 'tank',
-    name: 'Tank',
-    shortDescription: 'Speicherbehälter (Liter, Füllstandsanzeige & manueller Slider)',
+    name: 'Tank mit Schwimmerlanze',
+    shortDescription: 'Behälter mit integrierter Schwimmerlanze (3 oder 5 Schaltpunkte)',
     category: 'fluid',
-    width: 200,
-    height: 224,
+    width: 216,
+    height: 260,
     defaultLabelPrefix: 'B1 Tank',
   },
   (id, label, x, y) => new TankComponent(id, label, x, y)
@@ -199,8 +213,8 @@ ComponentRegistry.register(
 ComponentRegistry.register(
   {
     type: 'float_probe',
-    name: 'Schwimmerlanze',
-    shortDescription: 'Tank-Füllstandssensor mit Min- und Max-Schaltausgängen',
+    name: 'Schwimmerlanze (Separat)',
+    shortDescription: 'Separater Füllstandssensor für externe Tanks',
     category: 'sensor',
     width: 188,
     height: 148,

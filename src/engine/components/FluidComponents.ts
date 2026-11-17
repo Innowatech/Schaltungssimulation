@@ -1,8 +1,14 @@
+/**
+ * @license
+ * SPDX-License-Identifier: Apache-2.0
+ */
+
 import { HIGH_24V, SimComponent, ZERO_VOLT } from '../SimComponent';
 import {
   ComponentCategory,
   ComponentFaultType,
   ElectricalSignal,
+  FluidSignal,
   PortDefinition,
   SimulationContext,
 } from '../types';
@@ -10,14 +16,20 @@ import {
 export class TankComponent extends SimComponent {
   public readonly type = 'tank';
   public readonly category: ComponentCategory = 'fluid';
-  public readonly width = 200;
-  public readonly height = 224;
+  public readonly width = 216;
+  public readonly height = 260;
 
-  constructor(id: string, label = 'B1 Haupttank', x = 0, y = 0) {
+  constructor(id: string, label = 'B1 Tank mit Schwimmer', x = 0, y = 0) {
     super(id, label, x, y);
     this.params = {
       capacityLiters: 1000,
       initialLevelPct: 30,
+      probeMode: '3_points' as '3_points' | '5_points',
+      dryPct: 10,
+      preLowPct: 25,
+      minPct: 40,
+      maxPct: 80,
+      overflowPct: 95,
     };
     this.runtimeState = {
       levelLiters: 300,
@@ -25,11 +37,27 @@ export class TankComponent extends SimComponent {
       outflowLph: 0,
       isFull: false,
       isEmpty: false,
+      dryState: false,
+      preLowState: false,
+      minState: false,
+      maxState: true,
+      overflowState: true,
     };
   }
 
   public getPorts(): PortDefinition[] {
-    return [
+    const mode = (this.params.probeMode as '3_points' | '5_points') || '3_points';
+    const ports: PortDefinition[] = [
+      {
+        id: 'v24_in',
+        label: '+24V',
+        description: 'Sensor-Versorgung +24V DC',
+        domain: 'electrical',
+        direction: 'input',
+        side: 'left',
+        offsetX: 0,
+        offsetY: 48,
+      },
       {
         id: 'fluid_in',
         label: 'Zulauf',
@@ -38,19 +66,76 @@ export class TankComponent extends SimComponent {
         direction: 'input',
         side: 'left',
         offsetX: 0,
-        offsetY: 56,
+        offsetY: 130,
       },
       {
         id: 'fluid_out',
         label: 'Ablauf',
-        description: 'Fluid-Ausgang (Ablauf)',
+        description: 'Fluid-Ausgang / Ablauf',
         domain: 'fluid',
+        direction: 'output',
+        side: 'right',
+        offsetX: this.width,
+        offsetY: 210,
+      },
+      {
+        id: 'min_out',
+        label: 'MIN',
+        description: 'Min-Kontakt (NO, Schließer)',
+        domain: 'electrical',
+        direction: 'output',
+        side: 'right',
+        offsetX: this.width,
+        offsetY: 76,
+      },
+      {
+        id: 'max_out',
+        label: 'MAX',
+        description: 'Max-Kontakt (NC, Öffner)',
+        domain: 'electrical',
+        direction: 'output',
+        side: 'right',
+        offsetX: this.width,
+        offsetY: 120,
+      },
+      {
+        id: 'dry_out',
+        label: 'DRY',
+        description: 'Trockenlauf-Kontakt (NO, Schließer)',
+        domain: 'electrical',
         direction: 'output',
         side: 'right',
         offsetX: this.width,
         offsetY: 164,
       },
     ];
+
+    if (mode === '5_points') {
+      ports.push(
+        {
+          id: 'pre_out',
+          label: 'VOR',
+          description: 'Vorleer-Kontakt (NO, Schließer)',
+          domain: 'electrical',
+          direction: 'output',
+          side: 'left',
+          offsetX: 0,
+          offsetY: 190,
+        },
+        {
+          id: 'ovf_out',
+          label: 'OVF',
+          description: 'Überlauf-Kontakt (NC, Öffner)',
+          domain: 'electrical',
+          direction: 'output',
+          side: 'left',
+          offsetX: 0,
+          offsetY: 230,
+        }
+      );
+    }
+
+    return ports;
   }
 
   public getSupportedFaults(): ComponentFaultType[] {
@@ -84,6 +169,46 @@ export class TankComponent extends SimComponent {
     this.runtimeState.isEmpty = this.isEmpty();
   }
 
+  public evaluateElectrical(
+    inputs: Map<string, ElectricalSignal>,
+    _context: SimulationContext
+  ): Map<string, ElectricalSignal> {
+    const inSig = inputs.get('v24_in') ?? ZERO_VOLT;
+    const powered = inSig.energized;
+    const voltage = inSig.voltage;
+    const pct = this.getLevelPercent();
+
+    const dryTh = Number(this.params.dryPct ?? 10);
+    const preTh = Number(this.params.preLowPct ?? 25);
+    const minTh = Number(this.params.minPct ?? 40);
+    const maxTh = Number(this.params.maxPct ?? 80);
+    const ovfTh = Number(this.params.overflowPct ?? 95);
+
+    const dryActive = pct >= dryTh;
+    const preActive = pct >= preTh;
+    const minActive = pct >= minTh;
+    const maxActive = pct < maxTh;
+    const ovfActive = pct < ovfTh;
+
+    this.runtimeState.dryState = dryActive;
+    this.runtimeState.preLowState = preActive;
+    this.runtimeState.minState = minActive;
+    this.runtimeState.maxState = maxActive;
+    this.runtimeState.overflowState = ovfActive;
+
+    const outputs = new Map<string, ElectricalSignal>();
+    const activeSig = (active: boolean) =>
+      powered && active ? { ...HIGH_24V, voltage } : ZERO_VOLT;
+
+    outputs.set('dry_out', activeSig(dryActive));
+    outputs.set('pre_out', activeSig(preActive));
+    outputs.set('min_out', activeSig(minActive));
+    outputs.set('max_out', activeSig(maxActive));
+    outputs.set('ovf_out', activeSig(ovfActive));
+
+    return outputs;
+  }
+
   public reset(): void {
     super.reset();
     const initPct = Math.max(0, Math.min(100, Number(this.params.initialLevelPct ?? 30)));
@@ -107,14 +232,15 @@ export class FloatProbeComponent extends SimComponent {
     super(id, label, x, y);
     this.params = {
       tankId: '',
-      minPercent: 20,
-      maxPercent: 85,
-      supplyMode: 'external' as 'external' | 'internal',
-      minLogic: 'below' as 'below' | 'above',
-      maxLogic: 'above' as 'above' | 'below',
+      targetTankId: '',
+      levelPct: 50,
+      probeMode: '3_points',
+      dryPct: 10,
+      minPct: 40,
+      maxPct: 80,
     };
     this.runtimeState = {
-      tankLevelPct: null as number | null,
+      tankLevelPct: 50,
       minTriggered: false,
       maxTriggered: false,
       powered: false,
@@ -126,95 +252,91 @@ export class FloatProbeComponent extends SimComponent {
       {
         id: 'v24_in',
         label: '+24V',
-        description: 'Sensor-Versorgung +24V DC',
+        description: 'Sensor-Versorgung +24V',
         domain: 'electrical',
         direction: 'input',
         side: 'left',
         offsetX: 0,
-        offsetY: 56,
+        offsetY: 36,
       },
       {
         id: 'min_out',
         label: 'MIN',
-        description: 'Schaltausgang Min-Level',
+        description: 'Min-Kontakt',
         domain: 'electrical',
         direction: 'output',
         side: 'right',
         offsetX: this.width,
-        offsetY: 64,
+        offsetY: 40,
       },
       {
         id: 'max_out',
         label: 'MAX',
-        description: 'Schaltausgang Max-Level',
+        description: 'Max-Kontakt',
         domain: 'electrical',
         direction: 'output',
         side: 'right',
         offsetX: this.width,
-        offsetY: 112,
+        offsetY: 80,
+      },
+      {
+        id: 'dry_out',
+        label: 'DRY',
+        description: 'Trockenlauf',
+        domain: 'electrical',
+        direction: 'output',
+        side: 'right',
+        offsetX: this.width,
+        offsetY: 120,
       },
     ];
   }
 
   public getSupportedFaults(): ComponentFaultType[] {
-    return ['short_circuit'];
-  }
-
-  public getElectricalLoadAmps(): number {
-    if (this.fault === 'short_circuit') return 25.0;
-    return this.runtimeState.powered ? 0.15 : 0;
+    return [];
   }
 
   public evaluateElectrical(
     inputs: Map<string, ElectricalSignal>,
     context: SimulationContext
   ): Map<string, ElectricalSignal> {
-    const tankId = String(this.params.tankId ?? '');
-    const target = tankId ? (context.getComponentById(tankId) as TankComponent | undefined) : undefined;
-
-    const supplyMode = (this.params.supplyMode as 'external' | 'internal') || 'external';
     const inSig = inputs.get('v24_in') ?? ZERO_VOLT;
-    const powered = (supplyMode === 'internal' || inSig.energized) && this.fault !== 'short_circuit';
-    const voltage = supplyMode === 'internal' ? 24 : inSig.voltage;
+    const powered = inSig.energized;
+    const voltage = inSig.voltage;
 
-    let levelPct: number | null = null;
-    let minTriggered = false;
-    let maxTriggered = false;
-
-    if (target && target.type === 'tank') {
-      levelPct = target.getLevelPercent();
-      const minTh = Number(this.params.minPercent ?? 20);
-      const maxTh = Number(this.params.maxPercent ?? 85);
-      const minLogic = (this.params.minLogic as 'below' | 'above') || 'below';
-      const maxLogic = (this.params.maxLogic as 'above' | 'below') || 'above';
-
-      minTriggered = minLogic === 'below' ? levelPct <= minTh : levelPct >= minTh;
-      maxTriggered = maxLogic === 'above' ? levelPct >= maxTh : levelPct <= maxTh;
+    let pct = Number(this.params.levelPct ?? 50);
+    const tankId = String(this.params.tankId ?? this.params.targetTankId ?? '');
+    if (tankId && context && typeof context.getComponentById === 'function') {
+      const targetTank = context.getComponentById(tankId) as TankComponent | undefined;
+      if (targetTank && typeof targetTank.getLevelPercent === 'function') {
+        pct = targetTank.getLevelPercent();
+      }
     }
 
-    this.runtimeState.tankLevelPct = levelPct;
-    this.runtimeState.minTriggered = minTriggered;
-    this.runtimeState.maxTriggered = maxTriggered;
+    this.runtimeState.tankLevelPct = pct;
     this.runtimeState.powered = powered;
 
+    const dryTh = Number(this.params.dryPct ?? 10);
+    const minTh = Number(this.params.minPct ?? 40);
+    const maxTh = Number(this.params.maxPct ?? 80);
+
+    const dryActive = pct >= dryTh;
+    const minActive = pct >= minTh;
+    const maxActive = pct < maxTh;
+
+    this.runtimeState.minTriggered = minActive;
+    this.runtimeState.maxTriggered = maxActive;
+
     const outputs = new Map<string, ElectricalSignal>();
-    outputs.set('min_out', powered && minTriggered ? { ...HIGH_24V, voltage } : ZERO_VOLT);
-    outputs.set('max_out', powered && maxTriggered ? { ...HIGH_24V, voltage } : ZERO_VOLT);
+    const activeSig = (active: boolean) =>
+      powered && active ? { ...HIGH_24V, voltage } : ZERO_VOLT;
+
+    outputs.set('dry_out', activeSig(dryActive));
+    outputs.set('min_out', activeSig(minActive));
+    outputs.set('max_out', activeSig(maxActive));
     return outputs;
   }
-
-  public reset(): void {
-    super.reset();
-    this.runtimeState = {
-      tankLevelPct: null,
-      minTriggered: false,
-      maxTriggered: false,
-      powered: false,
-    };
-  }
 }
-
-export type GeneratorStatus = 'standby' | 'running' | 'locked_full' | 'locked_ext' | 'blocked';
 
 export class GeneratorComponent extends SimComponent {
   public readonly type = 'generator';
@@ -230,90 +352,68 @@ export class GeneratorComponent extends SimComponent {
     this.runtimeState = {
       enableActive: false,
       lockActive: false,
-      status: 'standby' as GeneratorStatus,
       actualFlowLph: 0,
+      status: 'standby',
     };
   }
 
   public getPorts(): PortDefinition[] {
     return [
       {
-        id: 'enable_in',
-        label: 'Freig.',
-        description: 'Elektrische Freigabe (24V DC)',
+        id: 'v24_in',
+        label: 'EN',
+        description: 'Freigabe-Eingang +24V',
         domain: 'electrical',
         direction: 'input',
         side: 'left',
         offsetX: 0,
-        offsetY: 56,
+        offsetY: 40,
       },
       {
         id: 'lock_in',
         label: 'Sperre',
-        description: 'Elektrische Sperre / Tank Voll (24V = Stopp)',
+        description: 'Sperr-Eingang (z.B. Tank Voll)',
         domain: 'electrical',
         direction: 'input',
         side: 'left',
         offsetX: 0,
-        offsetY: 102,
+        offsetY: 96,
       },
       {
         id: 'fluid_out',
-        label: 'Ausg.',
-        description: 'Fluid-Ausgang (Liter/Stunde)',
+        label: 'Fluid',
+        description: 'Fluid-Ausgang',
         domain: 'fluid',
         direction: 'output',
         side: 'right',
         offsetX: this.width,
-        offsetY: 78,
+        offsetY: 70,
       },
     ];
   }
 
   public getSupportedFaults(): ComponentFaultType[] {
-    return ['short_circuit', 'power_failure'];
-  }
-
-  public getElectricalLoadAmps(): number {
-    if (this.fault === 'short_circuit') return 25.0;
-    if (this.runtimeState.status === 'running') return 4.5;
-    if (this.runtimeState.enableActive) return 0.4;
-    return 0;
-  }
-
-  public evaluateElectrical(
-    inputs: Map<string, ElectricalSignal>,
-    _context: SimulationContext
-  ): Map<string, ElectricalSignal> {
-    const enableSig = inputs.get('enable_in') ?? ZERO_VOLT;
-    const lockSig = inputs.get('lock_in') ?? ZERO_VOLT;
-    const faulted = this.fault === 'power_failure' || this.fault === 'short_circuit';
-    this.runtimeState.enableActive = enableSig.energized && !faulted;
-    this.runtimeState.lockActive = lockSig.energized;
-    return new Map();
-  }
-
-  public canProduceElectrically(): boolean {
-    return (
-      Boolean(this.runtimeState.enableActive) &&
-      !Boolean(this.runtimeState.lockActive) &&
-      this.fault !== 'power_failure' &&
-      this.fault !== 'short_circuit'
-    );
+    return ['power_failure', 'short_circuit'];
   }
 
   public getNominalFlowLph(): number {
     return Math.max(0, Number(this.params.flowRateLph ?? 1200));
   }
 
-  public reset(): void {
-    super.reset();
-    this.runtimeState = {
-      enableActive: false,
-      lockActive: false,
-      status: 'standby',
-      actualFlowLph: 0,
-    };
+  public evaluateElectrical(
+    inputs: Map<string, ElectricalSignal>,
+    _context: SimulationContext
+  ): Map<string, ElectricalSignal> {
+    if (this.fault === 'power_failure' || this.fault === 'short_circuit') {
+      this.runtimeState.enableActive = false;
+      this.runtimeState.lockActive = false;
+      return new Map();
+    }
+    const enSig = inputs.get('v24_in');
+    const lockSig = inputs.get('lock_in');
+    this.runtimeState.enableActive = Boolean(enSig?.energized);
+    this.runtimeState.lockActive = Boolean(lockSig?.energized);
+    return new Map();
   }
 }
 
@@ -323,13 +423,12 @@ export class SolenoidValve32Component extends SimComponent {
   public readonly width = 196;
   public readonly height = 136;
 
-  constructor(id: string, label = 'Y1 3/2-Wege-Ventil', x = 0, y = 0) {
+  constructor(id: string, label = 'Y1 3/2-Magnetventil', x = 0, y = 0) {
     super(id, label, x, y);
     this.params = {};
     this.runtimeState = {
-      coilEnergized: false,
+      energized: false,
       activeFlowLph: 0,
-      activePath: 'P->A' as 'P->A' | 'P->B',
     };
   }
 
@@ -338,89 +437,73 @@ export class SolenoidValve32Component extends SimComponent {
       {
         id: 'a1',
         label: 'A1',
-        description: 'Magnetspule Steuersignal (24V DC)',
+        description: 'Spulenanschluss +24V',
         domain: 'electrical',
         direction: 'input',
         side: 'left',
         offsetX: 0,
-        offsetY: 46,
+        offsetY: 40,
       },
       {
-        id: 'p_in',
-        label: 'P',
+        id: 'fluid_p',
+        label: 'P (Ein)',
         description: 'Fluid-Eingang P',
         domain: 'fluid',
         direction: 'input',
         side: 'left',
         offsetX: 0,
-        offsetY: 98,
+        offsetY: 100,
       },
       {
-        id: 'a_out',
+        id: 'fluid_a',
         label: 'A (NC)',
-        description: 'Fluid-Ausgang A (aktiv bei 0V)',
+        description: 'Ausgang A (stromlos offen / NC)',
         domain: 'fluid',
         direction: 'output',
         side: 'right',
         offsetX: this.width,
-        offsetY: 66,
+        offsetY: 50,
       },
       {
-        id: 'b_out',
+        id: 'fluid_b',
         label: 'B (NO)',
-        description: 'Fluid-Ausgang B (aktiv bei 24V)',
+        description: 'Ausgang B (bestromt offen / NO)',
         domain: 'fluid',
         direction: 'output',
         side: 'right',
         offsetX: this.width,
-        offsetY: 110,
+        offsetY: 104,
       },
     ];
   }
 
   public getSupportedFaults(): ComponentFaultType[] {
-    return ['valve_stuck_closed', 'valve_stuck_open', 'short_circuit'];
-  }
-
-  public getElectricalLoadAmps(): number {
-    if (this.fault === 'short_circuit') return 25.0;
-    return this.runtimeState.coilEnergized ? 0.85 : 0;
+    return ['power_failure', 'short_circuit', 'valve_stuck_closed', 'valve_stuck_open'];
   }
 
   public evaluateElectrical(
     inputs: Map<string, ElectricalSignal>,
     _context: SimulationContext
   ): Map<string, ElectricalSignal> {
-    const a1 = inputs.get('a1') ?? ZERO_VOLT;
-    const energized = a1.energized && this.fault !== 'short_circuit';
-    this.runtimeState.coilEnergized = energized;
-
-    // Fehler: klemmendes Ventil ignoriert elektrisches Schalten
-    if (this.fault === 'valve_stuck_closed') {
-      // Klemmt in Ruhestellung P -> A
-      this.runtimeState.activePath = 'P->A';
-    } else if (this.fault === 'valve_stuck_open') {
-      // Klemmt in geschalteter Stellung P -> B
-      this.runtimeState.activePath = 'P->B';
-    } else {
-      this.runtimeState.activePath = energized ? 'P->B' : 'P->A';
+    if (this.fault === 'power_failure' || this.fault === 'short_circuit') {
+      this.runtimeState.energized = false;
+      return new Map();
     }
+    const a1 = inputs.get('a1');
+    this.runtimeState.energized = Boolean(a1?.energized);
     return new Map();
   }
 
-  public getActiveFluidPaths(): Array<[string, string]> {
-    return this.runtimeState.activePath === 'P->B'
-      ? [['p_in', 'b_out']]
-      : [['p_in', 'a_out']];
-  }
+  public getActiveFluidPaths(): [string, string][] {
+    let energized = Boolean(this.runtimeState.energized);
+    if (this.fault === 'valve_stuck_closed') energized = false;
+    if (this.fault === 'valve_stuck_open') energized = true;
 
-  public reset(): void {
-    super.reset();
-    this.runtimeState = {
-      coilEnergized: false,
-      activeFlowLph: 0,
-      activePath: 'P->A',
-    };
+    if (!energized) {
+      return [['fluid_p', 'fluid_a']];
+    } else {
+      return [['fluid_p', 'fluid_b']];
+    }
   }
 }
 
@@ -430,13 +513,13 @@ export class SolenoidValve22Component extends SimComponent {
   public readonly width = 186;
   public readonly height = 120;
 
-  constructor(id: string, label = 'Y2 2/2-Wege-Ventil', x = 0, y = 0) {
+  constructor(id: string, label = 'Y2 2/2-Magnetventil', x = 0, y = 0) {
     super(id, label, x, y);
     this.params = {
-      normalState: 'NC' as 'NC' | 'NO',
+      normalState: 'NC',
     };
     this.runtimeState = {
-      coilEnergized: false,
+      energized: false,
       isOpen: false,
       activeFlowLph: 0,
     };
@@ -447,74 +530,74 @@ export class SolenoidValve22Component extends SimComponent {
       {
         id: 'a1',
         label: 'A1',
-        description: 'Magnetspule Steuersignal (24V DC)',
+        description: 'Spulenanschluss +24V',
         domain: 'electrical',
         direction: 'input',
         side: 'left',
         offsetX: 0,
-        offsetY: 44,
+        offsetY: 36,
       },
       {
-        id: 'p_in',
+        id: 'fluid_in',
         label: 'P',
-        description: 'Fluid-Eingang P',
+        description: 'Fluid-Eingang',
         domain: 'fluid',
         direction: 'input',
         side: 'left',
         offsetX: 0,
-        offsetY: 88,
+        offsetY: 86,
       },
       {
-        id: 'a_out',
+        id: 'fluid_out',
         label: 'A',
-        description: 'Fluid-Ausgang A',
+        description: 'Fluid-Ausgang',
         domain: 'fluid',
         direction: 'output',
         side: 'right',
         offsetX: this.width,
-        offsetY: 88,
+        offsetY: 60,
       },
     ];
   }
 
   public getSupportedFaults(): ComponentFaultType[] {
-    return ['valve_stuck_closed', 'valve_stuck_open', 'short_circuit'];
-  }
-
-  public getElectricalLoadAmps(): number {
-    if (this.fault === 'short_circuit') return 25.0;
-    return this.runtimeState.coilEnergized ? 0.75 : 0;
+    return ['power_failure', 'short_circuit', 'valve_stuck_closed', 'valve_stuck_open'];
   }
 
   public evaluateElectrical(
     inputs: Map<string, ElectricalSignal>,
     _context: SimulationContext
   ): Map<string, ElectricalSignal> {
-    const a1 = inputs.get('a1') ?? ZERO_VOLT;
-    const energized = a1.energized && this.fault !== 'short_circuit';
-    const normalState = (this.params.normalState as 'NC' | 'NO') || 'NC';
+    if (this.fault === 'power_failure' || this.fault === 'short_circuit') {
+      this.runtimeState.energized = false;
+      this.runtimeState.isOpen = this.params.normalState === 'NO';
+      return new Map();
+    }
+    const a1 = inputs.get('a1');
+    const energized = Boolean(a1?.energized);
+    this.runtimeState.energized = energized;
 
-    let isOpen = normalState === 'NC' ? energized : !energized;
-    if (this.fault === 'valve_stuck_closed') isOpen = false;
-    if (this.fault === 'valve_stuck_open') isOpen = true;
+    const normal = this.params.normalState ?? 'NC';
+    let open = normal === 'NO' ? !energized : energized;
+    if (this.fault === 'valve_stuck_closed') open = false;
+    if (this.fault === 'valve_stuck_open') open = true;
 
-    this.runtimeState.coilEnergized = energized;
-    this.runtimeState.isOpen = isOpen;
+    this.runtimeState.isOpen = open;
     return new Map();
   }
 
-  public getActiveFluidPaths(): Array<[string, string]> {
-    return this.runtimeState.isOpen ? [['p_in', 'a_out']] : [];
+  public isOpen(): boolean {
+    let open = Boolean(this.runtimeState.isOpen);
+    if (this.fault === 'valve_stuck_closed') open = false;
+    if (this.fault === 'valve_stuck_open') open = true;
+    return open;
   }
 
-  public reset(): void {
-    super.reset();
-    const normalState = (this.params.normalState as 'NC' | 'NO') || 'NC';
-    this.runtimeState = {
-      coilEnergized: false,
-      isOpen: normalState === 'NO',
-      activeFlowLph: 0,
-    };
+  public getActiveFluidPaths(): [string, string][] {
+    if (this.isOpen()) {
+      return [['fluid_in', 'fluid_out']];
+    }
+    return [];
   }
 }
 
@@ -524,15 +607,14 @@ export class DrainConsumerComponent extends SimComponent {
   public readonly width = 188;
   public readonly height = 128;
 
-  constructor(id: string, label = 'V1 Ablass / Verbraucher', x = 0, y = 0) {
+  constructor(id: string, label = 'V1 Verbraucher / Ablauf', x = 0, y = 0) {
     super(id, label, x, y);
     this.params = {
       drainRateLph: 450,
       manualOverride: false,
     };
     this.runtimeState = {
-      ctrlEnergized: false,
-      isOpen: false,
+      energized: false,
       actualFlowLph: 0,
     };
   }
@@ -540,68 +622,51 @@ export class DrainConsumerComponent extends SimComponent {
   public getPorts(): PortDefinition[] {
     return [
       {
-        id: 'ctrl_in',
-        label: '24V',
-        description: 'Elektrische Ansteuerung (24V DC)',
+        id: 'v24_in',
+        label: 'EIN',
+        description: 'Ansteuerung +24V',
         domain: 'electrical',
         direction: 'input',
         side: 'left',
         offsetX: 0,
-        offsetY: 48,
+        offsetY: 44,
       },
       {
         id: 'fluid_in',
-        label: 'Zulauf',
-        description: 'Fluid-Eingang (vom Tank / Ventil)',
+        label: 'Ablauf',
+        description: 'Fluid-Eingang (zum Ablauf)',
         domain: 'fluid',
         direction: 'input',
         side: 'left',
         offsetX: 0,
-        offsetY: 94,
+        offsetY: 96,
       },
     ];
   }
 
   public getSupportedFaults(): ComponentFaultType[] {
-    return ['valve_stuck_closed', 'valve_stuck_open', 'short_circuit'];
-  }
-
-  public getElectricalLoadAmps(): number {
-    if (this.fault === 'short_circuit') return 25.0;
-    return this.runtimeState.ctrlEnergized ? 1.2 : 0;
-  }
-
-  public evaluateElectrical(
-    inputs: Map<string, ElectricalSignal>,
-    _context: SimulationContext
-  ): Map<string, ElectricalSignal> {
-    const ctrl = inputs.get('ctrl_in') ?? ZERO_VOLT;
-    const energized = ctrl.energized && this.fault !== 'short_circuit';
-    this.runtimeState.ctrlEnergized = energized;
-
-    let open = energized || Boolean(this.params.manualOverride);
-    if (this.fault === 'valve_stuck_closed') open = false;
-    if (this.fault === 'valve_stuck_open') open = true;
-    this.runtimeState.isOpen = open;
-    return new Map();
-  }
-
-  public isOpen(): boolean {
-    if (this.fault === 'valve_stuck_closed') return false;
-    if (this.fault === 'valve_stuck_open') return true;
-    return Boolean(this.runtimeState.ctrlEnergized) || Boolean(this.params.manualOverride);
+    return ['power_failure', 'short_circuit'];
   }
 
   public getDrainRateLph(): number {
     return Math.max(0, Number(this.params.drainRateLph ?? 450));
   }
 
-  public reset(): void {
-    super.reset();
-    this.runtimeState = {
-      ctrlEnergized: false,
-      isOpen: Boolean(this.params.manualOverride),
-      actualFlowLph: 0,
-    };
+  public evaluateElectrical(
+    inputs: Map<string, ElectricalSignal>,
+    _context: SimulationContext
+  ): Map<string, ElectricalSignal> {
+    if (this.fault === 'power_failure' || this.fault === 'short_circuit') {
+      this.runtimeState.energized = false;
+      return new Map();
+    }
+    const inSig = inputs.get('v24_in');
+    const energized = Boolean(inSig?.energized) || Boolean(this.params.manualOverride);
+    this.runtimeState.energized = energized;
+    return new Map();
+  }
+
+  public isOpen(): boolean {
+    return Boolean(this.runtimeState.energized) || Boolean(this.params.manualOverride);
   }
 }

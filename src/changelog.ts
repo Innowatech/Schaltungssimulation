@@ -5,9 +5,28 @@ export interface ChangelogEntry {
   changes: string[];
 }
 
-export const CURRENT_VERSION = '1.3';
+export const CURRENT_VERSION = '1.5';
 
 export const CHANGELOG_ENTRIES: ChangelogEntry[] = [
+  {
+    version: '1.5',
+    title: 'Installierbare App (PWA), Mobile-Ansicht & GitHub Pages',
+    date: '2026-11-17',
+    changes: [
+      'PWA-Integration (vite-plugin-pwa): Installierbar auf Windows/Mac-PC sowie Android und iPhone/iPad (inkl. Offline-Cache und Installations-Button in der Steuerleiste).',
+      'GitHub Actions Workflow (.github/workflows/deploy.yml) für automatisches Veröffentlichen über GitHub Pages eingerichtet.',
+      'Mobile-Optimierung: Seitenleisten öffnen auf schmalen Handy-Displays als schwebende Overlays, Touch-Verschieben auf der Arbeitsfläche aktiviert.',
+    ],
+  },
+  {
+    version: '1.4',
+    title: 'Fehlerbehebung Schwimmerlanze (levelPct undefined)',
+    date: '2026-11-14',
+    changes: [
+      'Behoben: TypeError beim Zugriff auf toFixed bei undefiniertem levelPct in FloatProbeComponent.',
+      'Sichere Fallbacks und automatisierte Tank-Füllstandsermittlung für separate Schwimmerlanzen integriert.',
+    ],
+  },
   {
     version: '1.3',
     title: 'Ein-/Ausblendbare Bauteil-Bibliothek & Eigenschaften',

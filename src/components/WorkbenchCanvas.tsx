@@ -270,7 +270,7 @@ export const WorkbenchCanvas: React.FC<WorkbenchCanvasProps> = ({
         e.dataTransfer.dropEffect = 'copy';
       }}
       onDrop={handleDrop}
-      className="relative flex-1 bg-[#0B111A] overflow-hidden select-none"
+      className="relative flex-1 bg-[#0B111A] overflow-hidden select-none touch-none"
       style={{
         backgroundImage: `radial-gradient(circle, #1E2D42 1px, transparent 1px)`,
         backgroundSize: `${24 * zoom}px ${24 * zoom}px`,

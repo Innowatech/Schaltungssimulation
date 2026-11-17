@@ -1,8 +1,18 @@
 # Changelog — Mechatronik & Fluidik Baukasten
 
-Alle Änderungen an diesem Projekt werden fortlaufend mit den Versionsnummern `1.0`, `1.1`, `1.2`, `1.3` usw. dokumentiert.
+Alle Änderungen an diesem Projekt werden fortlaufend mit den Versionsnummern `1.0`, `1.1`, `1.2`, `1.3`, `1.4`, `1.5` usw. dokumentiert.
 
-## [1.3] — Aktuelle Version
+## [1.5] — Aktuelle Version
+### Hinzugefügt
+- **Installierbare PWA (PC & Smartphone)**: Vollständiges Web App Manifest (`standalone`), Service Worker mit Offline-Caching, hochauflösende App-Icons (`any`, `maskable`, `apple-touch-icon`), In-App-Installationsbutton (inkl. iOS-Safari-Anleitung) sowie Offline-Statusanzeige.
+- **GitHub Pages Release-Workflow**: Automatisierte Build- und Deployment-Pipeline unter `.github/workflows/deploy.yml` mit dynamischer `base`-Pfad-Erkennung.
+- **Mobile- & Touch-Optimierung**: Responsive Drawer-Panels auf schmalen Bildschirmen (`< 768px`), `100dvh`-Layout und `touch-none` auf der Arbeitsfläche für sauberes Verschieben auf Touch-Geräten.
+
+## [1.4]
+### Behoben & Verbessert
+- **Schwimmerlanze (Separat)**: Behoben: `TypeError: can't access property "toFixed", levelPct is undefined` beim Rendern der getrennten Schwimmerlanze. `tankLevelPct` wird nun in der Simulation zuverlässig aus dem verknüpften Tank ermittelt und in der UI mit sicheren Fallbacks formatiert.
+
+## [1.3]
 ### Hinzugefügt
 - **Ein- und ausblendbare Seitenleisten**: Sowohl die linke **Bauteil-Bibliothek** als auch das rechte **Eigenschaften-/Fehler-Panel** lassen sich jetzt über die Schaltflächen in der Panel-Kopfzeile mit einem Klick ausblenden und über die schwebenden Rand-Buttons auf der Arbeitsfläche jederzeit wieder einblenden.
 
