@@ -1,14 +1,22 @@
 import { ComponentRegistry } from './ComponentRegistry';
 import { SimComponent, ZERO_ANALOG_MA, ZERO_VOLT } from './SimComponent';
 import {
+  DosingPumpComponent,
   DrainConsumerComponent,
+  FluidTeeComponent,
   GeneratorComponent,
+  GullyDrainComponent,
+  InjectionPointComponent,
+  MainWaterLineComponent,
   SolenoidValve22Component,
   SolenoidValve32Component,
   TankComponent,
+  WaterMeterComponent,
 } from './components/FluidComponents';
 import { PowerSupply24V, SwitchComponent } from './components/PowerAndSwitch';
 import { ContactorRelayComponent, TimerRelayComponent } from './components/Relays';
+import { LogicGateComponent } from './components/SignalAndLogic';
+import { TerminalBlockComponent } from './components/TerminalBlock';
 import {
   AnalogSignal,
   ComponentFaultType,
@@ -16,16 +24,21 @@ import {
   ConnectionFaultType,
   ElectricalSignal,
   FaultReportItem,
+  FluidMedium,
   FluidSignal,
   SerializedCircuit,
   SimulationContext,
 } from './types';
 
 interface FluidPathTrace {
-  targetComponent: SimComponent;
+  targetComponent: SimComponent | null;
   targetPortId: string;
+  openTerminalEnd: boolean;
   connectionIds: string[];
   valveIds: string[];
+  meterIds: string[];
+  injectionStops: Array<{ comp: InjectionPointComponent; portId: string }>;
+  maxFlowCapLph: number;
 }
 
 export class SimulationEngine {
@@ -124,6 +137,61 @@ export class SimulationEngine {
     this.evaluateInstant();
   }
 
+  /** Entfernt ungültige Verbindungen nach einer Port-Layout-Änderung (z. B. Lanze ausgeschaltet) */
+  public pruneInvalidConnectionsForComponent(componentId: string): void {
+    const comp = this.components.get(componentId);
+    if (!comp) return;
+    const validPortIds = new Set(comp.getPorts().map((p) => p.id));
+    this.connections = this.connections.filter((c) => {
+      if (c.fromComponentId === componentId && !validPortIds.has(c.fromPortId)) return false;
+      if (c.toComponentId === componentId && !validPortIds.has(c.toPortId)) return false;
+      return true;
+    });
+    this.evaluateInstant();
+  }
+
+  /** Fügt ein T-Stück oder eine Impfstelle direkt in eine bestehende Fluidleitung ein */
+  public insertFluidComponentOnConnection(
+    connectionId: string,
+    newType: 'fluid_tee' | 'injection_point'
+  ): SimComponent | null {
+    const conn = this.connections.find((c) => c.id === connectionId && c.domain === 'fluid');
+    if (!conn) return null;
+
+    const fromComp = this.components.get(conn.fromComponentId);
+    const toComp = this.components.get(conn.toComponentId);
+    if (!fromComp || !toComp) return null;
+
+    const p1 = fromComp.getPortWorldPosition(conn.fromPortId);
+    const p2 = toComp.getPortWorldPosition(conn.toPortId);
+    if (!p1 || !p2) return null;
+
+    const meta = ComponentRegistry.getMeta(newType);
+    if (!meta) return null;
+
+    const existingCount = Array.from(this.components.values()).filter(
+      (c) => c.type === newType
+    ).length;
+    const prefix = newType === 'fluid_tee' ? `T${existingCount + 1} T-Stück` : `I${existingCount + 1} Impfstelle`;
+    const newId = `comp_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`;
+    const x = Math.round(((p1.x + p2.x) / 2 - meta.width / 2) / 4) * 4;
+    const y = Math.round(((p1.y + p2.y) / 2 - meta.height / 2) / 4) * 4;
+
+    const newComp = ComponentRegistry.create(newType, newId, x, y, prefix);
+    this.components.set(newComp.id, newComp);
+
+    // Alte Verbindung ersetzen
+    this.connections = this.connections.filter((c) => c.id !== connectionId);
+
+    const inPortId = newType === 'fluid_tee' ? 'fluid_in_1' : 'main_in';
+    const outPortId = newType === 'fluid_tee' ? 'fluid_out_1' : 'fluid_out';
+
+    this.addConnection(conn.fromComponentId, conn.fromPortId, newComp.id, inPortId);
+    this.addConnection(newComp.id, outPortId, conn.toComponentId, conn.toPortId);
+    this.evaluateInstant();
+    return newComp;
+  }
+
   public reset(): void {
     this.totalSimSeconds = 0;
     for (const comp of this.components.values()) {
@@ -149,15 +217,46 @@ export class SimulationEngine {
     }
 
     for (const conn of circuit.connections) {
-      if (this.components.has(conn.fromComponentId) && this.components.has(conn.toComponentId)) {
-        this.connections.push({
-          ...conn,
-          fault: conn.fault ?? 'none',
-          active: false,
-          voltage: 0,
-          flowRateLph: 0,
-        });
+      const fromComp = this.components.get(conn.fromComponentId);
+      const toComp = this.components.get(conn.toComponentId);
+      if (!fromComp || !toComp) continue;
+
+      let fromPortId = conn.fromPortId;
+      let toPortId = conn.toPortId;
+
+      // Abwärtskompatibilität für alte Port-IDs (v1.0–v1.7)
+      if (fromComp instanceof GeneratorComponent && fromPortId === 'fluid_out') {
+        fromPortId = 'fluid_anolyte';
       }
+      if (toComp instanceof GeneratorComponent && toPortId === 'enable_in') {
+        toPortId = 'v24_in';
+      }
+      if (toComp instanceof SolenoidValve32Component && toPortId === 'p_in') {
+        toPortId = 'fluid_p';
+      }
+      if (fromComp instanceof SolenoidValve32Component) {
+        if (fromPortId === 'a_out') fromPortId = 'fluid_a';
+        if (fromPortId === 'b_out') fromPortId = 'fluid_b';
+      }
+      if (toComp instanceof SolenoidValve22Component && toPortId === 'p_in') {
+        toPortId = 'fluid_in';
+      }
+      if (fromComp instanceof SolenoidValve22Component && fromPortId === 'a_out') {
+        fromPortId = 'fluid_out';
+      }
+      if (toComp instanceof DrainConsumerComponent && toPortId === 'ctrl_in') {
+        toPortId = 'v24_in';
+      }
+
+      this.connections.push({
+        ...conn,
+        fromPortId,
+        toPortId,
+        fault: conn.fault ?? 'none',
+        active: false,
+        voltage: 0,
+        flowRateLph: 0,
+      });
     }
 
     this.evaluateInstant();
@@ -165,7 +264,7 @@ export class SimulationEngine {
 
   public serializeCircuit(name = 'Mechatronik Anlage'): SerializedCircuit {
     return {
-      version: 2,
+      version: 3,
       name,
       components: Array.from(this.components.values()).map((c) => c.serialize()),
       connections: this.connections.map(
@@ -185,6 +284,7 @@ export class SimulationEngine {
   public evaluateInstant(): void {
     this.solveElectricalAndAnalogNetwork();
     this.solveFluidNetwork(0);
+    this.solveElectricalAndAnalogNetwork();
   }
 
   public step(dtSimSeconds: number): void {
@@ -205,6 +305,7 @@ export class SimulationEngine {
 
     this.solveElectricalAndAnalogNetwork();
     this.solveFluidNetwork(dtSimSeconds);
+    this.solveElectricalAndAnalogNetwork();
   }
 
   /**
@@ -224,7 +325,6 @@ export class SimulationEngine {
         continue;
       }
 
-      // BFS entlang geschlossener Schaltpfade ab Netzteil-Ausgang
       const visited = new Set<string>([comp.id]);
       const queue: string[] = [comp.id];
 
@@ -233,11 +333,9 @@ export class SimulationEngine {
         const outgoing = elecConns.filter((c) => c.fromComponentId === currId);
 
         for (const conn of outgoing) {
-          // Wenn die Leitung selbst einen Kurzschluss hat und gespeist wird
           const srcComp = this.components.get(currId);
           if (!srcComp) continue;
 
-          // Prüfe ob der Ausgangsport durchgeschaltet ist
           if (!this.isPathConductingThroughComponent(srcComp, conn.fromPortId)) {
             continue;
           }
@@ -271,6 +369,9 @@ export class SimulationEngine {
     if (comp instanceof PowerSupply24V) {
       return Boolean(comp.params.enabled ?? true) && comp.fault !== 'power_failure';
     }
+    if (comp instanceof TerminalBlockComponent) {
+      return Boolean(comp.runtimeState.inputEnergized) && outputPortId.startsWith('out_');
+    }
     if (comp instanceof SwitchComponent) {
       return comp.isContactClosed();
     }
@@ -289,12 +390,12 @@ export class SimulationEngine {
     if (comp.type === 'current_transformer' && outputPortId === 'out') {
       return Boolean(comp.runtimeState.inputEnergized);
     }
+    if (comp instanceof LogicGateComponent && outputPortId === 'q') {
+      return Boolean(comp.runtimeState.out);
+    }
     return false;
   }
 
-  /**
-   * Summiert die nachgeschaltete Stromaufnahme (Ampere) ab einem Ausgangsport (für Stromwandler).
-   */
   private computeDownstreamLoadAmps(startCompId: string, startPortId: string): number {
     const elecConns = this.connections.filter(
       (c) => c.domain === 'electrical' && c.fault !== 'open_circuit'
@@ -322,7 +423,6 @@ export class SimulationEngine {
 
         totalAmps += dst.getElectricalLoadAmps();
 
-        // Durchgangselemente weiterverfolgen
         for (const outP of dst.getPorts()) {
           if (outP.domain === 'electrical' && outP.direction === 'output') {
             if (this.isPathConductingThroughComponent(dst, outP.id)) {
@@ -362,7 +462,6 @@ export class SimulationEngine {
     for (let pass = 0; pass < MAX_PASSES; pass++) {
       let changed = false;
 
-      // 1. Eingänge zurücksetzen
       for (const comp of this.components.values()) {
         const eIn = new Map<string, ElectricalSignal>();
         const aIn = new Map<string, AnalogSignal>();
@@ -377,23 +476,32 @@ export class SimulationEngine {
         inputAnalog.set(comp.id, aIn);
       }
 
-      // 2. Elektrische Verbindungen (Wired-OR, Fehler berücksichtigen)
       for (const conn of electricalConns) {
         if (conn.fault === 'open_circuit' || conn.fault === 'short_circuit') continue;
         const srcOutputs = outputElectrical.get(conn.fromComponentId);
         const sig = srcOutputs?.get(conn.fromPortId) ?? ZERO_VOLT;
-        if (sig.energized) {
-          const dstInputs = inputElectrical.get(conn.toComponentId);
-          if (dstInputs) {
-            const existing = dstInputs.get(conn.toPortId);
-            if (!existing || !existing.energized || sig.voltage > existing.voltage) {
-              dstInputs.set(conn.toPortId, sig);
-            }
-          }
+        const dstInputs = inputElectrical.get(conn.toComponentId);
+        if (!dstInputs) continue;
+
+        if (sig.energized || (sig.pulseDeltaCount && sig.pulseDeltaCount > 0) || (sig.pulseRatePerHour && sig.pulseRatePerHour > 0)) {
+          const existing = dstInputs.get(conn.toPortId);
+          const mergedPulseDelta =
+            (existing?.pulseDeltaCount ?? 0) + (sig.pulseDeltaCount ?? 0);
+          const mergedPulseRate = Math.max(
+            existing?.pulseRatePerHour ?? 0,
+            sig.pulseRatePerHour ?? 0
+          );
+          const nextSig: ElectricalSignal = {
+            domain: 'electrical',
+            energized: Boolean(existing?.energized) || sig.energized,
+            voltage: Math.max(existing?.voltage ?? 0, sig.energized ? sig.voltage : 0),
+            pulseDeltaCount: mergedPulseDelta > 0 ? mergedPulseDelta : undefined,
+            pulseRatePerHour: mergedPulseRate > 0 ? mergedPulseRate : undefined,
+          };
+          dstInputs.set(conn.toPortId, nextSig);
         }
       }
 
-      // 3. Analoge Verbindungen (4-20mA / 0-10V)
       for (const conn of analogConns) {
         if (conn.fault === 'open_circuit' || conn.fault === 'short_circuit') continue;
         const srcAnalog = outputAnalog.get(conn.fromComponentId);
@@ -406,7 +514,6 @@ export class SimulationEngine {
         }
       }
 
-      // 4. Elektrische und analoge Ausgänge je Komponente berechnen
       for (const comp of this.components.values()) {
         const eIn = inputElectrical.get(comp.id) ?? new Map();
         const aIn = inputAnalog.get(comp.id) ?? new Map();
@@ -415,7 +522,13 @@ export class SimulationEngine {
         const prevE = outputElectrical.get(comp.id)!;
         for (const [portId, sig] of nextE.entries()) {
           const prev = prevE.get(portId);
-          if (!prev || prev.energized !== sig.energized || prev.voltage !== sig.voltage) {
+          if (
+            !prev ||
+            prev.energized !== sig.energized ||
+            prev.voltage !== sig.voltage ||
+            prev.pulseDeltaCount !== sig.pulseDeltaCount ||
+            prev.pulseRatePerHour !== sig.pulseRatePerHour
+          ) {
             changed = true;
           }
           prevE.set(portId, sig);
@@ -440,7 +553,6 @@ export class SimulationEngine {
       if (!changed) break;
     }
 
-    // Aktualisiere Port-Signale & Leitungen
     for (const comp of this.components.values()) {
       for (const [pId, sig] of (inputElectrical.get(comp.id) ?? new Map()).entries()) {
         comp.portSignals.set(pId, sig);
@@ -482,37 +594,132 @@ export class SimulationEngine {
     return { electricalInputs: inputElectrical, analogInputs: inputAnalog };
   }
 
+  /** Findet für die Saugseite einer Dosierpumpe den vorgeschalteten Vorratsbehälter */
+  private findUpstreamTankForPump(
+    pumpId: string
+  ): { tank: TankComponent; connIds: string[]; valveIds: string[]; maxCap: number } | null {
+    const fluidConns = this.connections.filter(
+      (c) => c.domain === 'fluid' && c.fault !== 'open_circuit'
+    );
+    const visited = new Set<string>();
+
+    const dfsUp = (
+      compId: string,
+      portId: string,
+      connTrail: string[],
+      valveTrail: string[],
+      cap: number
+    ): { tank: TankComponent; connIds: string[]; valveIds: string[]; maxCap: number } | null => {
+      const key = `${compId}:${portId}`;
+      if (visited.has(key)) return null;
+      visited.add(key);
+
+      const incoming = fluidConns.filter(
+        (c) => c.toComponentId === compId && c.toPortId === portId
+      );
+
+      for (const conn of incoming) {
+        const src = this.components.get(conn.fromComponentId);
+        if (!src) continue;
+        const nextConns = [...connTrail, conn.id];
+
+        if (src instanceof TankComponent) {
+          return {
+            tank: src,
+            connIds: nextConns,
+            valveIds: valveTrail,
+            maxCap: cap,
+          };
+        }
+
+        const activePaths = src.getActiveFluidPaths();
+        for (const [inP, outP] of activePaths) {
+          if (outP === conn.fromPortId) {
+            let nextCap = cap;
+            if (src instanceof SolenoidValve22Component) {
+              nextCap = Math.min(nextCap, src.getFlowRateLimitLph());
+            }
+            const res = dfsUp(
+              src.id,
+              inP,
+              nextConns,
+              [...valveTrail, src.id],
+              nextCap
+            );
+            if (res) return res;
+          }
+        }
+      }
+      return null;
+    };
+
+    return dfsUp(pumpId, 'fluid_in', [], [], Number.POSITIVE_INFINITY);
+  }
+
   private solveFluidNetwork(dtSimSeconds: number): void {
     const fluidConns = this.connections.filter((c) => c.domain === 'fluid');
 
     for (const conn of fluidConns) {
       conn.active = false;
       conn.flowRateLph = 0;
+      conn.medium = undefined;
     }
 
     const tankInflow = new Map<string, number>();
     const tankOutflow = new Map<string, number>();
     const valveFlow = new Map<string, number>();
+    const meterFlow = new Map<string, number>();
+    const teeFlow = new Map<string, { flow: number; medium: FluidMedium }>();
+    const gullyFlow = new Map<string, { flow: number; medium: FluidMedium }>();
+    const injectionAcc = new Map<
+      string,
+      { mainFlow: number; dosingFlow: number; dosingMedium: FluidMedium }
+    >();
 
     for (const comp of this.components.values()) {
-      if (comp.type === 'tank') {
+      if (comp instanceof TankComponent) {
         tankInflow.set(comp.id, 0);
         tankOutflow.set(comp.id, 0);
-      } else if (comp.type === 'valve_22' || comp.type === 'valve_32') {
+      } else if (comp instanceof SolenoidValve22Component || comp instanceof SolenoidValve32Component) {
         comp.runtimeState.activeFlowLph = 0;
         valveFlow.set(comp.id, 0);
-      } else if (comp.type === 'drain_consumer') {
+      } else if (comp instanceof DrainConsumerComponent) {
         comp.runtimeState.actualFlowLph = 0;
-      } else if (comp.type === 'generator') {
+      } else if (comp instanceof GeneratorComponent) {
+        comp.runtimeState.actualFlowLph = 0;
+        comp.runtimeState.actualAnolyteLph = 0;
+        comp.runtimeState.actualKatholyteLph = 0;
+      } else if (comp instanceof WaterMeterComponent) {
+        comp.runtimeState.currentFlowLph = 0;
+        meterFlow.set(comp.id, 0);
+      } else if (comp instanceof MainWaterLineComponent) {
+        comp.runtimeState.actualFlowLph = 0;
+        comp.runtimeState.flowing = false;
+      } else if (comp instanceof GullyDrainComponent) {
+        comp.runtimeState.actualFlowLph = 0;
+        gullyFlow.set(comp.id, { flow: 0, medium: 'water' });
+      } else if (comp instanceof FluidTeeComponent) {
+        comp.runtimeState.activeFlowLph = 0;
+        teeFlow.set(comp.id, { flow: 0, medium: 'water' });
+      } else if (comp instanceof InjectionPointComponent) {
+        injectionAcc.set(comp.id, {
+          mainFlow: 0,
+          dosingFlow: 0,
+          dosingMedium: 'anolyte',
+        });
+      } else if (comp instanceof DosingPumpComponent) {
         comp.runtimeState.actualFlowLph = 0;
       }
     }
 
-    const addConnFlow = (connId: string, flowLph: number) => {
+    const addConnFlow = (connId: string, flowLph: number, medium: FluidMedium) => {
       const conn = fluidConns.find((c) => c.id === connId);
       if (!conn || flowLph <= 0) return;
       conn.flowRateLph = (conn.flowRateLph ?? 0) + flowLph;
       conn.active = true;
+      if (!conn.medium || medium !== 'water') {
+        conn.medium = medium;
+      }
     };
 
     const traceDownstream = (startCompId: string, startPortId: string): FluidPathTrace[] => {
@@ -523,7 +730,10 @@ export class SimulationEngine {
         portId: string,
         visited: Set<string>,
         connTrail: string[],
-        valveTrail: string[]
+        valveTrail: string[],
+        meterTrail: string[],
+        injectionStops: Array<{ comp: InjectionPointComponent; portId: string }>,
+        capLph: number
       ) => {
         const key = `${compId}:${portId}`;
         if (visited.has(key)) return;
@@ -543,98 +753,338 @@ export class SimulationEngine {
 
           const nextConns = [...connTrail, conn.id];
 
-          if (target.type === 'tank' || target.type === 'drain_consumer') {
+          if (
+            target instanceof TankComponent ||
+            target instanceof DrainConsumerComponent ||
+            target instanceof GullyDrainComponent
+          ) {
             results.push({
               targetComponent: target,
               targetPortId: conn.toPortId,
+              openTerminalEnd: false,
               connectionIds: nextConns,
               valveIds: valveTrail,
+              meterIds: meterTrail,
+              injectionStops,
+              maxFlowCapLph: capLph,
             });
-          } else {
-            const activePaths = target.getActiveFluidPaths();
-            for (const [inP, outP] of activePaths) {
-              if (inP === conn.toPortId) {
-                dfs(target.id, outP, nextVisited, nextConns, [...valveTrail, target.id]);
+            continue;
+          }
+
+          if (target instanceof DosingPumpComponent) {
+            // Dosierpumpen werden separat über Saug/Druck gelöst
+            continue;
+          }
+
+          const nextInj =
+            target instanceof InjectionPointComponent
+              ? [...injectionStops, { comp: target, portId: conn.toPortId }]
+              : injectionStops;
+          const nextMeters =
+            target instanceof WaterMeterComponent ? [...meterTrail, target.id] : meterTrail;
+          const nextValves = [...valveTrail, target.id];
+          let nextCap = capLph;
+          if (target instanceof SolenoidValve22Component) {
+            nextCap = Math.min(nextCap, target.getFlowRateLimitLph());
+          }
+
+          const activePaths = target.getActiveFluidPaths();
+          let pushedForward = false;
+          for (const [inP, outP] of activePaths) {
+            if (inP === conn.toPortId) {
+              // Prüfe, ob am Ausgang dieses Durchgangselements noch eine Leitung hängt
+              const hasDownstreamWire = fluidConns.some(
+                (c2) =>
+                  c2.fromComponentId === target.id &&
+                  c2.fromPortId === outP &&
+                  c2.fault !== 'open_circuit'
+              );
+              if (hasDownstreamWire) {
+                dfs(
+                  target.id,
+                  outP,
+                  nextVisited,
+                  nextConns,
+                  nextValves,
+                  nextMeters,
+                  nextInj,
+                  nextCap
+                );
+                pushedForward = true;
+              } else if (
+                target instanceof InjectionPointComponent ||
+                target instanceof WaterMeterComponent
+              ) {
+                // Impfstelle / Wasserzähler ohne weiteren End-Gulli gilt als offene Ausgangsleitung ins Netz
+                results.push({
+                  targetComponent: target,
+                  targetPortId: conn.toPortId,
+                  openTerminalEnd: true,
+                  connectionIds: nextConns,
+                  valveIds: nextValves,
+                  meterIds: nextMeters,
+                  injectionStops: nextInj,
+                  maxFlowCapLph: nextCap,
+                });
+                pushedForward = true;
               }
             }
+          }
+
+          if (!pushedForward && activePaths.length === 0) {
+            // Ventil ist geschlossen -> blockiert
           }
         }
       };
 
-      dfs(startCompId, startPortId, new Set(), [], []);
+      dfs(startCompId, startPortId, new Set(), [], [], [], [], Number.POSITIVE_INFINITY);
       return results;
     };
 
-    // 1. Erzeuger-Anlagen
+    const recordTraceFlow = (
+      trace: FluidPathTrace,
+      flowLph: number,
+      medium: FluidMedium
+    ) => {
+      if (flowLph <= 0) return;
+
+      if (trace.targetComponent instanceof TankComponent && !trace.openTerminalEnd) {
+        tankInflow.set(
+          trace.targetComponent.id,
+          (tankInflow.get(trace.targetComponent.id) ?? 0) + flowLph
+        );
+      } else if (trace.targetComponent instanceof DrainConsumerComponent && !trace.openTerminalEnd) {
+        trace.targetComponent.runtimeState.actualFlowLph =
+          Number(trace.targetComponent.runtimeState.actualFlowLph ?? 0) + flowLph;
+      } else if (trace.targetComponent instanceof GullyDrainComponent) {
+        const cur = gullyFlow.get(trace.targetComponent.id) ?? { flow: 0, medium };
+        cur.flow += flowLph;
+        if (medium !== 'water') cur.medium = medium;
+        gullyFlow.set(trace.targetComponent.id, cur);
+      }
+
+      for (const cId of trace.connectionIds) addConnFlow(cId, flowLph, medium);
+      for (const vId of trace.valveIds) {
+        valveFlow.set(vId, (valveFlow.get(vId) ?? 0) + flowLph);
+        const comp = this.components.get(vId);
+        if (comp instanceof FluidTeeComponent) {
+          const cur = teeFlow.get(vId) ?? { flow: 0, medium };
+          cur.flow += flowLph;
+          if (medium !== 'water') cur.medium = medium;
+          teeFlow.set(vId, cur);
+        }
+      }
+      for (const mId of trace.meterIds) {
+        meterFlow.set(mId, (meterFlow.get(mId) ?? 0) + flowLph);
+      }
+      for (const inj of trace.injectionStops) {
+        const acc = injectionAcc.get(inj.comp.id);
+        if (!acc) continue;
+        if (inj.portId === 'dosing_in') {
+          acc.dosingFlow += flowLph;
+          acc.dosingMedium = medium;
+        } else {
+          acc.mainFlow += flowLph;
+        }
+      }
+    };
+
+    const isTraceAccepting = (t: FluidPathTrace): boolean => {
+      if (t.openTerminalEnd) return true;
+      if (t.targetComponent instanceof TankComponent) return !t.targetComponent.isFull();
+      if (t.targetComponent instanceof DrainConsumerComponent) return t.targetComponent.isOpen();
+      if (t.targetComponent instanceof GullyDrainComponent) return true;
+      return false;
+    };
+
+    // 1. Erzeuger-Anlagen (Anolyt primär, Katholyt nebenrangig)
     for (const comp of this.components.values()) {
       if (!(comp instanceof GeneratorComponent)) continue;
 
-      if (!comp.runtimeState.enableActive) {
-        comp.runtimeState.status = 'standby';
-        comp.runtimeState.actualFlowLph = 0;
+      const enabled = Boolean(comp.runtimeState.productionEnabled);
+      if (!enabled) {
+        if (Boolean(comp.params.manualStop)) {
+          comp.runtimeState.status = 'manual_stop';
+        } else if (Boolean(comp.runtimeState.lockActive)) {
+          comp.runtimeState.status = 'locked_ext';
+        } else {
+          comp.runtimeState.status = 'standby';
+        }
         continue;
       }
 
-      if (comp.runtimeState.lockActive) {
-        comp.runtimeState.status = 'locked_ext';
+      // Anolyt-Strang (Blau)
+      const anoTraces = traceDownstream(comp.id, 'fluid_anolyte');
+      const activeAno = anoTraces.filter(isTraceAccepting);
+      let producedAno = 0;
+
+      if (activeAno.length > 0) {
+        const perBranch = comp.getAnolyteNominalLph() / activeAno.length;
+        for (const trace of activeAno) {
+          let accepted = Math.min(perBranch, trace.maxFlowCapLph);
+          if (!trace.openTerminalEnd && trace.targetComponent instanceof DrainConsumerComponent) {
+            accepted = Math.min(accepted, trace.targetComponent.getDrainRateLph());
+          }
+          recordTraceFlow(trace, accepted, 'anolyte');
+          producedAno += accepted;
+        }
+      }
+
+      // Katholyt-Strang (Grün) — läuft nebenrangig solange Anlage produziert & Ausgangspfad frei (Tank o. Gulli)
+      const katTraces = traceDownstream(comp.id, 'fluid_katholyte');
+      const activeKat = katTraces.filter(isTraceAccepting);
+      let producedKat = 0;
+
+      if (activeKat.length > 0) {
+        const perBranch = comp.getKatholyteNominalLph() / activeKat.length;
+        for (const trace of activeKat) {
+          let accepted = Math.min(perBranch, trace.maxFlowCapLph);
+          if (!trace.openTerminalEnd && trace.targetComponent instanceof DrainConsumerComponent) {
+            accepted = Math.min(accepted, trace.targetComponent.getDrainRateLph());
+          }
+          recordTraceFlow(trace, accepted, 'katholyte');
+          producedKat += accepted;
+        }
+      }
+
+      comp.runtimeState.actualAnolyteLph = producedAno;
+      comp.runtimeState.actualKatholyteLph = producedKat;
+      comp.runtimeState.actualFlowLph = producedAno + producedKat;
+
+      const hasFullTarget = [...anoTraces, ...katTraces].some(
+        (t) =>
+          !t.openTerminalEnd &&
+          t.targetComponent instanceof TankComponent &&
+          t.targetComponent.isFull()
+      );
+      if (producedAno > 0 || producedKat > 0) {
+        comp.runtimeState.status = 'running';
+      } else if (hasFullTarget) {
+        comp.runtimeState.status = 'locked_full';
+      } else {
+        comp.runtimeState.status = 'blocked';
+      }
+    }
+
+    // 2. Hauptleitung (Rohwasser)
+    for (const comp of this.components.values()) {
+      if (!(comp instanceof MainWaterLineComponent)) continue;
+      if (!comp.isActiveFlow()) {
         comp.runtimeState.actualFlowLph = 0;
+        comp.runtimeState.flowing = false;
         continue;
       }
 
       const traces = traceDownstream(comp.id, 'fluid_out');
-      if (traces.length === 0) {
-        comp.runtimeState.status = 'blocked';
-        comp.runtimeState.actualFlowLph = 0;
-        continue;
-      }
-
-      const activeTraces = traces.filter((t) => {
-        if (t.targetComponent instanceof TankComponent) {
-          return !t.targetComponent.isFull();
-        }
-        if (t.targetComponent instanceof DrainConsumerComponent) {
-          return t.targetComponent.isOpen();
-        }
-        return false;
-      });
-
-      const hasFullTankTarget = traces.some(
-        (t) => t.targetComponent instanceof TankComponent && t.targetComponent.isFull()
-      );
-
+      const activeTraces = traces.filter(isTraceAccepting);
       if (activeTraces.length === 0) {
-        comp.runtimeState.status = hasFullTankTarget ? 'locked_full' : 'blocked';
         comp.runtimeState.actualFlowLph = 0;
+        comp.runtimeState.flowing = false;
         continue;
       }
 
       const nominal = comp.getNominalFlowLph();
       const perBranch = nominal / activeTraces.length;
-      let totalProduced = 0;
+      let totalWater = 0;
 
       for (const trace of activeTraces) {
-        let accepted = perBranch;
-        if (trace.targetComponent instanceof DrainConsumerComponent) {
-          accepted = Math.min(perBranch, trace.targetComponent.getDrainRateLph());
-          trace.targetComponent.runtimeState.actualFlowLph =
-            Number(trace.targetComponent.runtimeState.actualFlowLph ?? 0) + accepted;
-        } else if (trace.targetComponent instanceof TankComponent) {
-          tankInflow.set(
-            trace.targetComponent.id,
-            (tankInflow.get(trace.targetComponent.id) ?? 0) + accepted
-          );
-        }
-
-        totalProduced += accepted;
-        for (const cId of trace.connectionIds) addConnFlow(cId, accepted);
-        for (const vId of trace.valveIds) valveFlow.set(vId, (valveFlow.get(vId) ?? 0) + accepted);
+        const accepted = Math.min(perBranch, trace.maxFlowCapLph);
+        recordTraceFlow(trace, accepted, 'water');
+        totalWater += accepted;
       }
 
-      comp.runtimeState.status = totalProduced > 0 ? 'running' : 'blocked';
-      comp.runtimeState.actualFlowLph = totalProduced;
+      comp.runtimeState.actualFlowLph = totalWater;
+      comp.runtimeState.flowing = totalWater > 0;
     }
 
-    // 2. Tank-Ablauf
+    // 3. Dosierpumpen (Grundfos DDA: saugen aus Tank-Sauglanze & impfen ins Netz/Impfstelle)
+    for (const comp of this.components.values()) {
+      if (!(comp instanceof DosingPumpComponent)) continue;
+
+      const targetFlow = Math.max(0, Number(comp.runtimeState.targetFlowLph ?? 0));
+      const upstreamTank = this.findUpstreamTankForPump(comp.id);
+
+      if (!upstreamTank) {
+        comp.runtimeState.dryFault = targetFlow > 0;
+        comp.runtimeState.actualFlowLph = 0;
+        comp.runtimeState.status = targetFlow > 0 ? 'no_suction' : 'standby';
+        continue;
+      }
+
+      if (upstreamTank.tank.isDryForPump()) {
+        comp.runtimeState.dryFault = true;
+        comp.runtimeState.actualFlowLph = 0;
+        comp.runtimeState.status = 'dry_fault';
+        continue;
+      }
+
+      comp.runtimeState.dryFault = false;
+      const medium = upstreamTank.tank.getMedium();
+
+      if (targetFlow <= 0) {
+        comp.runtimeState.actualFlowLph = 0;
+        comp.runtimeState.status = Boolean(comp.params.manualStop) ? 'manual_stop' : 'standby';
+        continue;
+      }
+
+      const downstream = traceDownstream(comp.id, 'fluid_out').filter(isTraceAccepting);
+      if (downstream.length === 0) {
+        comp.runtimeState.actualFlowLph = 0;
+        comp.runtimeState.status = 'blocked';
+        continue;
+      }
+
+      const tankAvailLph =
+        dtSimSeconds > 0
+          ? (upstreamTank.tank.getLevelLiters() / (dtSimSeconds / 3600)) +
+            (tankInflow.get(upstreamTank.tank.id) ?? 0) -
+            (tankOutflow.get(upstreamTank.tank.id) ?? 0)
+          : Number.POSITIVE_INFINITY;
+
+      const cappedDemand = Math.min(
+        targetFlow,
+        upstreamTank.maxCap,
+        Math.max(0, tankAvailLph)
+      );
+
+      if (cappedDemand <= 0.0001) {
+        comp.runtimeState.actualFlowLph = 0;
+        comp.runtimeState.status = 'dry_fault';
+        comp.runtimeState.dryFault = true;
+        continue;
+      }
+
+      const perBranch = cappedDemand / downstream.length;
+      let totalDosed = 0;
+
+      for (const trace of downstream) {
+        const flow = Math.min(perBranch, trace.maxFlowCapLph);
+        recordTraceFlow(trace, flow, medium);
+        totalDosed += flow;
+      }
+
+      // Saugseite markieren & Tankentnahme buchen
+      if (totalDosed > 0) {
+        for (const cId of upstreamTank.connIds) addConnFlow(cId, totalDosed, medium);
+        for (const vId of upstreamTank.valveIds) {
+          valveFlow.set(vId, (valveFlow.get(vId) ?? 0) + totalDosed);
+        }
+        tankOutflow.set(
+          upstreamTank.tank.id,
+          (tankOutflow.get(upstreamTank.tank.id) ?? 0) + totalDosed
+        );
+        if (dtSimSeconds > 0) {
+          comp.runtimeState.totalDosedLiters =
+            Number(comp.runtimeState.totalDosedLiters ?? 0) +
+            totalDosed * (dtSimSeconds / 3600);
+        }
+      }
+
+      comp.runtimeState.actualFlowLph = totalDosed;
+      comp.runtimeState.status = totalDosed > 0 ? 'dosing' : 'blocked';
+    }
+
+    // 4. Schwerkraft- / Ventil-Tankablauf (z. B. über 2/2-Ventil zum Gulli)
     for (const comp of this.components.values()) {
       if (!(comp instanceof TankComponent)) continue;
       if (comp.isEmpty()) continue;
@@ -644,6 +1094,7 @@ export class SimulationEngine {
         (t) =>
           (t.targetComponent instanceof DrainConsumerComponent &&
             t.targetComponent.isOpen()) ||
+          t.targetComponent instanceof GullyDrainComponent ||
           (t.targetComponent instanceof TankComponent &&
             t.targetComponent.id !== comp.id &&
             !t.targetComponent.isFull())
@@ -653,9 +1104,10 @@ export class SimulationEngine {
 
       const currentLiters = comp.getLevelLiters();
       const inflow = tankInflow.get(comp.id) ?? 0;
+      const alreadyOut = tankOutflow.get(comp.id) ?? 0;
       const maxAvailableLph =
         dtSimSeconds > 0
-          ? currentLiters / (dtSimSeconds / 3600) + inflow
+          ? Math.max(0, currentLiters / (dtSimSeconds / 3600) + inflow - alreadyOut)
           : Number.POSITIVE_INFINITY;
 
       let requestedTotalLph = 0;
@@ -664,9 +1116,13 @@ export class SimulationEngine {
         if (t.targetComponent instanceof DrainConsumerComponent) {
           const alreadySupplied = Number(t.targetComponent.runtimeState.actualFlowLph ?? 0);
           demand = Math.max(0, t.targetComponent.getDrainRateLph() - alreadySupplied);
+        } else if (t.targetComponent instanceof GullyDrainComponent) {
+          // Begrenze Abflussrate durch Ventile auf dem Pfad (oder Standard 1200 L/h freier Auslauf)
+          demand = Number.isFinite(t.maxFlowCapLph) ? t.maxFlowCapLph : 1200;
         } else if (t.targetComponent instanceof TankComponent) {
-          demand = 600;
+          demand = Number.isFinite(t.maxFlowCapLph) ? Math.min(600, t.maxFlowCapLph) : 600;
         }
+        demand = Math.min(demand, t.maxFlowCapLph);
         requestedTotalLph += demand;
         return { trace: t, demand };
       });
@@ -675,34 +1131,24 @@ export class SimulationEngine {
 
       const scale = requestedTotalLph > maxAvailableLph ? maxAvailableLph / requestedTotalLph : 1;
       let totalTankOut = 0;
+      const medium = comp.getMedium();
 
       for (const { trace, demand } of branchDemands) {
         const flow = demand * scale;
         if (flow <= 0) continue;
         totalTankOut += flow;
-
-        if (trace.targetComponent instanceof DrainConsumerComponent) {
-          trace.targetComponent.runtimeState.actualFlowLph =
-            Number(trace.targetComponent.runtimeState.actualFlowLph ?? 0) + flow;
-        } else if (trace.targetComponent instanceof TankComponent) {
-          tankInflow.set(
-            trace.targetComponent.id,
-            (tankInflow.get(trace.targetComponent.id) ?? 0) + flow
-          );
-        }
-
-        for (const cId of trace.connectionIds) addConnFlow(cId, flow);
-        for (const vId of trace.valveIds) valveFlow.set(vId, (valveFlow.get(vId) ?? 0) + flow);
+        recordTraceFlow(trace, flow, medium);
       }
 
-      tankOutflow.set(comp.id, (tankOutflow.get(comp.id) ?? 0) + totalTankOut);
+      tankOutflow.set(comp.id, alreadyOut + totalTankOut);
     }
 
-    // 3. Tankvolumen integrieren
+    // 5. Zustände aller Fluid-Komponenten aktualisieren & Tankvolumen integrieren
     for (const comp of this.components.values()) {
       if (comp instanceof TankComponent) {
         const inLph = tankInflow.get(comp.id) ?? 0;
         const outLph = tankOutflow.get(comp.id) ?? 0;
+        const medium = comp.getMedium();
         comp.runtimeState.inflowLph = inLph;
         comp.runtimeState.outflowLph = outLph;
 
@@ -720,22 +1166,50 @@ export class SimulationEngine {
           flowRateLph: inLph,
           hasPressure: inLph > 0,
           backpressureFull: comp.isFull(),
+          medium,
         } as FluidSignal);
         comp.portSignals.set('fluid_out', {
           domain: 'fluid',
           flowRateLph: outLph,
           hasPressure: !comp.isEmpty(),
           backpressureFull: false,
+          medium,
         } as FluidSignal);
-      } else if (comp.type === 'valve_22' || comp.type === 'valve_32') {
+      } else if (comp instanceof SolenoidValve22Component || comp instanceof SolenoidValve32Component) {
         comp.runtimeState.activeFlowLph = valveFlow.get(comp.id) ?? 0;
+      } else if (comp instanceof WaterMeterComponent) {
+        comp.runtimeState.currentFlowLph = meterFlow.get(comp.id) ?? 0;
+      } else if (comp instanceof GullyDrainComponent) {
+        const g = gullyFlow.get(comp.id) ?? { flow: 0, medium: 'water' as FluidMedium };
+        comp.runtimeState.actualFlowLph = g.flow;
+        comp.runtimeState.lastMedium = g.medium;
+        if (dtSimSeconds > 0 && g.flow > 0) {
+          comp.runtimeState.totalDiscardedLiters =
+            Number(comp.runtimeState.totalDiscardedLiters ?? 0) +
+            g.flow * (dtSimSeconds / 3600);
+        }
+      } else if (comp instanceof FluidTeeComponent) {
+        const t = teeFlow.get(comp.id) ?? { flow: 0, medium: 'water' as FluidMedium };
+        comp.runtimeState.activeFlowLph = t.flow;
+        comp.runtimeState.medium = t.medium;
+      } else if (comp instanceof InjectionPointComponent) {
+        const acc = injectionAcc.get(comp.id) ?? {
+          mainFlow: 0,
+          dosingFlow: 0,
+          dosingMedium: 'anolyte' as FluidMedium,
+        };
+        const total = acc.mainFlow + acc.dosingFlow;
+        const ppm =
+          acc.mainFlow > 0.001 ? (acc.dosingFlow / acc.mainFlow) * 1_000_000 : 0;
+        comp.runtimeState.mainFlowLph = acc.mainFlow;
+        comp.runtimeState.dosingFlowLph = acc.dosingFlow;
+        comp.runtimeState.totalFlowLph = total;
+        comp.runtimeState.concentrationPpm = ppm;
+        comp.runtimeState.dosingMedium = acc.dosingMedium;
       }
     }
   }
 
-  /**
-   * Analysiert alle aktiven Fehler und deren konkrete Auswirkung auf das Gesamtsystem.
-   */
   public getActiveFaultReports(): FaultReportItem[] {
     const reports: FaultReportItem[] = [];
 
@@ -832,9 +1306,6 @@ export class SimulationEngine {
     return reports;
   }
 
-  /**
-   * Löst einen gezielt ausgewählten Zufallsfehler an einem Bauteil oder einer Leitung aus.
-   */
   public triggerRandomFault(): FaultReportItem | null {
     type Candidate =
       | { kind: 'component'; comp: SimComponent; fault: ComponentFaultType }

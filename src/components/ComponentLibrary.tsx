@@ -18,7 +18,7 @@ const CATEGORY_GROUPS: Array<{ title: string; categories: ComponentCategory[] }>
     categories: ['logic'],
   },
   {
-    title: 'Fluidik & Sensorik',
+    title: 'Fluidik, Dosierung & Sensorik',
     categories: ['fluid', 'sensor'],
   },
 ];
@@ -57,11 +57,11 @@ function renderMiniSchematic(type: string): React.ReactNode {
     case 'timer_relay':
       return (
         <svg viewBox="0 0 36 28" className="w-9 h-7 shrink-0">
-          <rect x="5" y="4" width="26" height="20" rx="2.5" fill="#162133" stroke="#F59E0B" strokeWidth="1.4" />
-          <circle cx="14" cy="14" r="5" fill="none" stroke="#FBBF24" strokeWidth="1.3" />
-          <polyline points="14,11 14,14 16.5,15.5" fill="none" stroke="#FBBF24" strokeWidth="1.3" />
-          <line x1="23" y1="9" x2="27" y2="9" stroke="#94A3B8" strokeWidth="1.3" />
-          <line x1="23" y1="19" x2="27" y2="19" stroke="#94A3B8" strokeWidth="1.3" />
+          <rect x="5" y="4" width="26" height="20" rx="2.5" fill="#162133" stroke="#84CC16" strokeWidth="1.4" />
+          <circle cx="14" cy="14" r="5" fill="none" stroke="#A3E635" strokeWidth="1.3" />
+          <polyline points="14,11 14,14 16.5,15.5" fill="none" stroke="#A3E635" strokeWidth="1.3" />
+          <circle cx="25" cy="9" r="1.7" fill="#10B981" />
+          <circle cx="25" cy="19" r="1.7" fill="#FBBF24" />
         </svg>
       );
     case 'contactor_relay':
@@ -113,12 +113,21 @@ function renderMiniSchematic(type: string): React.ReactNode {
         </svg>
       );
     }
+    case 'anolyte_tank':
     case 'tank':
       return (
         <svg viewBox="0 0 36 28" className="w-9 h-7 shrink-0">
-          <rect x="8" y="3" width="20" height="22" rx="2" fill="#0F172A" stroke="#64748B" strokeWidth="1.5" />
-          <rect x="9.5" y="13" width="17" height="10.5" rx="1" fill="#0EA5E9" fillOpacity="0.65" />
-          <line x1="8" y1="13" x2="28" y2="13" stroke="#38BDF8" strokeWidth="1.2" />
+          <rect x="8" y="3" width="20" height="22" rx="2" fill="#0F172A" stroke="#38BDF8" strokeWidth="1.5" />
+          <rect x="9.5" y="13" width="17" height="10.5" rx="1" fill="#0EA5E9" fillOpacity="0.7" />
+          <line x1="8" y1="13" x2="28" y2="13" stroke="#7DD3FC" strokeWidth="1.2" />
+        </svg>
+      );
+    case 'katholyte_tank':
+      return (
+        <svg viewBox="0 0 36 28" className="w-9 h-7 shrink-0">
+          <rect x="8" y="3" width="20" height="22" rx="2" fill="#0F172A" stroke="#10B981" strokeWidth="1.5" />
+          <rect x="9.5" y="13" width="17" height="10.5" rx="1" fill="#10B981" fillOpacity="0.7" />
+          <line x1="8" y1="13" x2="28" y2="13" stroke="#6EE7B7" strokeWidth="1.2" />
         </svg>
       );
     case 'float_probe':
@@ -132,9 +141,52 @@ function renderMiniSchematic(type: string): React.ReactNode {
     case 'generator':
       return (
         <svg viewBox="0 0 36 28" className="w-9 h-7 shrink-0">
-          <circle cx="17" cy="14" r="9" fill="#162133" stroke="#0EA5E9" strokeWidth="1.5" />
-          <polygon points="15,9 23,14 15,19" fill="#38BDF8" />
-          <line x1="26" y1="14" x2="33" y2="14" stroke="#0EA5E9" strokeWidth="2" />
+          <circle cx="16" cy="14" r="9" fill="#162133" stroke="#0EA5E9" strokeWidth="1.5" />
+          <polygon points="14,9 21,14 14,19" fill="#38BDF8" />
+          <line x1="25" y1="10" x2="33" y2="10" stroke="#0EA5E9" strokeWidth="2" />
+          <line x1="25" y1="18" x2="33" y2="18" stroke="#10B981" strokeWidth="2" />
+        </svg>
+      );
+    case 'dosing_pump':
+      return (
+        <svg viewBox="0 0 36 28" className="w-9 h-7 shrink-0">
+          <rect x="7" y="5" width="22" height="18" rx="3" fill="#162133" stroke="#818CF8" strokeWidth="1.5" />
+          <text x="18" y="16.5" textAnchor="middle" fill="#A5B4FC" fontSize="7.5" fontFamily="monospace" fontWeight="700">
+            DDA
+          </text>
+        </svg>
+      );
+    case 'main_water_line':
+      return (
+        <svg viewBox="0 0 36 28" className="w-9 h-7 shrink-0">
+          <line x1="3" y1="14" x2="33" y2="14" stroke="#38BDF8" strokeWidth="3.2" />
+          <polygon points="16,9 24,14 16,19" fill="#E0F2FE" />
+        </svg>
+      );
+    case 'water_meter':
+      return (
+        <svg viewBox="0 0 36 28" className="w-9 h-7 shrink-0">
+          <circle cx="18" cy="14" r="9" fill="#162133" stroke="#38BDF8" strokeWidth="1.5" />
+          <text x="18" y="16.5" textAnchor="middle" fill="#7DD3FC" fontSize="7" fontFamily="monospace" fontWeight="700">
+            m³
+          </text>
+        </svg>
+      );
+    case 'injection_point':
+      return (
+        <svg viewBox="0 0 36 28" className="w-9 h-7 shrink-0">
+          <line x1="4" y1="12" x2="32" y2="12" stroke="#38BDF8" strokeWidth="2.5" />
+          <line x1="18" y1="24" x2="18" y2="12" stroke="#10B981" strokeWidth="2" />
+          <circle cx="18" cy="12" r="2.8" fill="#FBBF24" />
+        </svg>
+      );
+    case 'fluid_tee':
+      return (
+        <svg viewBox="0 0 36 28" className="w-9 h-7 shrink-0">
+          <line x1="4" y1="14" x2="20" y2="14" stroke="#38BDF8" strokeWidth="2.4" />
+          <line x1="20" y1="8" x2="32" y2="8" stroke="#38BDF8" strokeWidth="2.2" />
+          <line x1="20" y1="20" x2="32" y2="20" stroke="#38BDF8" strokeWidth="2.2" />
+          <line x1="20" y1="8" x2="20" y2="20" stroke="#38BDF8" strokeWidth="2.2" />
         </svg>
       );
     case 'valve_32':
@@ -152,6 +204,16 @@ function renderMiniSchematic(type: string): React.ReactNode {
           <polygon points="8,8 18,14 8,20" fill="#162133" stroke="#38BDF8" strokeWidth="1.4" />
           <polygon points="28,8 18,14 28,20" fill="#162133" stroke="#38BDF8" strokeWidth="1.4" />
           <line x1="18" y1="4" x2="18" y2="14" stroke="#94A3B8" strokeWidth="1.3" />
+        </svg>
+      );
+    case 'gully_drain':
+      return (
+        <svg viewBox="0 0 36 28" className="w-9 h-7 shrink-0">
+          <rect x="7" y="14" width="22" height="9" rx="1.5" fill="#162133" stroke="#64748B" strokeWidth="1.4" />
+          <line x1="11" y1="16" x2="11" y2="21" stroke="#38BDF8" strokeWidth="1.5" />
+          <line x1="18" y1="16" x2="18" y2="21" stroke="#38BDF8" strokeWidth="1.5" />
+          <line x1="25" y1="16" x2="25" y2="21" stroke="#38BDF8" strokeWidth="1.5" />
+          <path d="M18 4 L18 11 M15 8 L18 11 L21 8" fill="none" stroke="#38BDF8" strokeWidth="1.6" />
         </svg>
       );
     case 'drain_consumer':
@@ -208,7 +270,6 @@ export const ComponentLibrary: React.FC<ComponentLibraryProps> = ({
           </button>
         </div>
 
-        {/* Bauteil-Schnellsuche */}
         <div className="relative">
           <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-slate-400" />
           <input
@@ -277,11 +338,11 @@ export const ComponentLibrary: React.FC<ComponentLibraryProps> = ({
         </div>
         <div className="flex items-center gap-2">
           <span className="inline-block w-2.5 h-0.5 bg-emerald-400" />
-          <span>Analogsignal (4–20mA / 0–10V)</span>
+          <span>4–20mA Analog / Katholyt (Grün)</span>
         </div>
         <div className="flex items-center gap-2">
           <span className="inline-block w-2.5 h-1 bg-sky-400 rounded-xs" />
-          <span>Fluid-Durchfluss animiert</span>
+          <span>Anolyt / Wasser (Blau)</span>
         </div>
       </div>
     </aside>

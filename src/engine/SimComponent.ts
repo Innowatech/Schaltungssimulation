@@ -37,7 +37,7 @@ export abstract class SimComponent {
   public abstract readonly type: string;
   public abstract readonly category: ComponentCategory;
   public abstract readonly width: number;
-  public abstract readonly height: number;
+  public abstract height: number;
 
   public label: string;
   public x: number;

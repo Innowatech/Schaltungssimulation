@@ -1,8 +1,13 @@
-import React, { useEffect, useRef, useState } from 'react';
-import { Minus, Plus, Unlink } from 'lucide-react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
+import { Check, Minus, Plus, Trash2, Unlink, X } from 'lucide-react';
 import { SimComponent } from '../engine/SimComponent';
 import { FloatProbeComponent, TankComponent } from '../engine/components/FluidComponents';
 import { Connection, PortDefinition } from '../engine/types';
+import {
+  RouteEndpoint,
+  buildPreviewOrthogonalPath,
+  routeAllOrthogonalWires,
+} from '../utils/orthogonalRouting';
 import { ComponentNode, PendingWireStart } from './ComponentNode';
 
 interface WorkbenchCanvasProps {
@@ -15,6 +20,7 @@ interface WorkbenchCanvasProps {
   onPanZoomChange: (pan: { x: number; y: number }, zoom: number) => void;
   onSelectComponent: (id: string | null) => void;
   onSelectConnection: (id: string | null) => void;
+  onOpenProperties: (id: string) => void;
   onDropNewComponent: (type: string, worldX: number, worldY: number) => void;
   onMoveComponent: (id: string, x: number, y: number) => void;
   onCreateConnection: (
@@ -23,39 +29,12 @@ interface WorkbenchCanvasProps {
     toCompId: string,
     toPortId: string
   ) => void;
+  onDeleteConnection: (connectionId: string) => void;
   onDeleteSelected: () => void;
   onMutateComponent: () => void;
 }
 
-function buildCurvePath(
-  x1: number,
-  y1: number,
-  side1: PortDefinition['side'],
-  x2: number,
-  y2: number,
-  side2: PortDefinition['side']
-): { d: string; midX: number; midY: number } {
-  const dx = Math.abs(x2 - x1);
-  const dy = Math.abs(y2 - y1);
-  const offset = Math.max(44, Math.min(180, dx * 0.48 + dy * 0.15));
-
-  const dir1 = side1 === 'left' ? -1 : side1 === 'right' ? 1 : 0;
-  const dir2 = side2 === 'left' ? -1 : side2 === 'right' ? 1 : 0;
-
-  const cx1 = x1 + dir1 * offset;
-  const cy1 = y1 + (side1 === 'top' ? -offset : side1 === 'bottom' ? offset : 0);
-  const cx2 = x2 + dir2 * offset;
-  const cy2 = y2 + (side2 === 'top' ? -offset : side2 === 'bottom' ? offset : 0);
-
-  const midX = 0.125 * x1 + 0.375 * cx1 + 0.375 * cx2 + 0.125 * x2;
-  const midY = 0.125 * y1 + 0.375 * cy1 + 0.375 * cy2 + 0.125 * y2;
-
-  return {
-    d: `M ${x1} ${y1} C ${cx1} ${cy1}, ${cx2} ${cy2}, ${x2} ${y2}`,
-    midX,
-    midY,
-  };
-}
+const DRAG_THRESHOLD_PX = 5;
 
 export const WorkbenchCanvas: React.FC<WorkbenchCanvasProps> = ({
   components,
@@ -67,9 +46,11 @@ export const WorkbenchCanvas: React.FC<WorkbenchCanvasProps> = ({
   onPanZoomChange,
   onSelectComponent,
   onSelectConnection,
+  onOpenProperties,
   onDropNewComponent,
   onMoveComponent,
   onCreateConnection,
+  onDeleteConnection,
   onDeleteSelected,
   onMutateComponent,
 }) => {
@@ -77,12 +58,33 @@ export const WorkbenchCanvas: React.FC<WorkbenchCanvasProps> = ({
   const [pendingWire, setPendingWire] = useState<PendingWireStart | null>(null);
   const [cursorWorld, setCursorWorld] = useState<{ x: number; y: number }>({ x: 0, y: 0 });
   const [hoveredConnId, setHoveredConnId] = useState<string | null>(null);
+  const [confirmDisconnectId, setConfirmDisconnectId] = useState<string | null>(null);
 
   const dragStateRef = useRef<
-    | { kind: 'pan'; startClientX: number; startClientY: number; startPanX: number; startPanY: number }
-    | { kind: 'comp'; compId: string; startClientX: number; startClientY: number; startCompX: number; startCompY: number }
+    | {
+        kind: 'pan';
+        pointerId: number;
+        startClientX: number;
+        startClientY: number;
+        startPanX: number;
+        startPanY: number;
+      }
+    | {
+        kind: 'comp';
+        pointerId: number;
+        compId: string;
+        startClientX: number;
+        startClientY: number;
+        startCompX: number;
+        startCompY: number;
+        hasExceededThreshold: boolean;
+      }
     | null
   >(null);
+
+  useEffect(() => {
+    setConfirmDisconnectId(null);
+  }, [selectedConnectionId]);
 
   const screenToWorld = (clientX: number, clientY: number) => {
     const rect = containerRef.current?.getBoundingClientRect();
@@ -104,6 +106,7 @@ export const WorkbenchCanvas: React.FC<WorkbenchCanvasProps> = ({
 
       if (e.key === 'Escape') {
         setPendingWire(null);
+        setConfirmDisconnectId(null);
       } else if ((e.key === 'Delete' || e.key === 'Backspace') && !isEditingInput) {
         onDeleteSelected();
       }
@@ -120,8 +123,15 @@ export const WorkbenchCanvas: React.FC<WorkbenchCanvasProps> = ({
     }
     onSelectComponent(null);
     onSelectConnection(null);
+    setConfirmDisconnectId(null);
+    try {
+      containerRef.current?.setPointerCapture(e.pointerId);
+    } catch {
+      // ignore if capture fails
+    }
     dragStateRef.current = {
       kind: 'pan',
+      pointerId: e.pointerId,
       startClientX: e.clientX,
       startClientY: e.clientY,
       startPanX: pan.x,
@@ -133,13 +143,20 @@ export const WorkbenchCanvas: React.FC<WorkbenchCanvasProps> = ({
     if (e.button !== 0) return;
     const comp = components.find((c) => c.id === componentId);
     if (!comp) return;
+    try {
+      containerRef.current?.setPointerCapture(e.pointerId);
+    } catch {
+      // ignore if capture fails
+    }
     dragStateRef.current = {
       kind: 'comp',
+      pointerId: e.pointerId,
       compId: componentId,
       startClientX: e.clientX,
       startClientY: e.clientY,
       startCompX: comp.x,
       startCompY: comp.y,
+      hasExceededThreshold: false,
     };
   };
 
@@ -156,6 +173,11 @@ export const WorkbenchCanvas: React.FC<WorkbenchCanvasProps> = ({
       const dy = e.clientY - drag.startClientY;
       onPanZoomChange({ x: drag.startPanX + dx, y: drag.startPanY + dy }, zoom);
     } else if (drag.kind === 'comp') {
+      const distPx = Math.hypot(e.clientX - drag.startClientX, e.clientY - drag.startClientY);
+      if (!drag.hasExceededThreshold) {
+        if (distPx < DRAG_THRESHOLD_PX) return;
+        drag.hasExceededThreshold = true;
+      }
       const dx = (e.clientX - drag.startClientX) / zoom;
       const dy = (e.clientY - drag.startClientY) / zoom;
       const nextX = Math.round((drag.startCompX + dx) / 4) * 4;
@@ -164,8 +186,17 @@ export const WorkbenchCanvas: React.FC<WorkbenchCanvasProps> = ({
     }
   };
 
-  const handlePointerUp = () => {
-    dragStateRef.current = null;
+  const handlePointerUp = (e: React.PointerEvent) => {
+    if (dragStateRef.current) {
+      try {
+        if (containerRef.current?.hasPointerCapture(e.pointerId)) {
+          containerRef.current.releasePointerCapture(e.pointerId);
+        }
+      } catch {
+        // ignore
+      }
+      dragStateRef.current = null;
+    }
   };
 
   const handleWheel = (e: React.WheelEvent) => {
@@ -239,7 +270,44 @@ export const WorkbenchCanvas: React.FC<WorkbenchCanvasProps> = ({
     }
   };
 
-  const compMap = new Map(components.map((c) => [c.id, c]));
+  const compMap = useMemo(
+    () => new Map(components.map((c) => [c.id, c])),
+    [components]
+  );
+
+  // Berechne alle rechtwinkligen Leitungen + Option-C-Kreuzungen
+  const routedWires = useMemo(() => {
+    const endpoints: RouteEndpoint[] = [];
+    for (const conn of connections) {
+      const fromComp = compMap.get(conn.fromComponentId);
+      const toComp = compMap.get(conn.toComponentId);
+      if (!fromComp || !toComp) continue;
+      const p1 = fromComp.getPortWorldPosition(conn.fromPortId);
+      const p2 = toComp.getPortWorldPosition(conn.toPortId);
+      if (!p1 || !p2) continue;
+
+      endpoints.push({
+        id: conn.id,
+        domain: conn.domain,
+        fromCompId: conn.fromComponentId,
+        toCompId: conn.toComponentId,
+        x1: p1.x,
+        y1: p1.y,
+        side1: p1.side,
+        x2: p2.x,
+        y2: p2.y,
+        side2: p2.side,
+      });
+    }
+    return routeAllOrthogonalWires(endpoints);
+  }, [compMap, connections]);
+
+  // Sortiere Render-Reihenfolge: Fluidrohre unten (innerhalb in Verbindungsreihenfolge, sodass spätere Rohre per Option-C Lücke drüberlaufen), dann Analog & Elektrik mit Brückenbögen drüber
+  const orderedConnections = useMemo(() => {
+    const fluids = connections.filter((c) => c.domain === 'fluid');
+    const signals = connections.filter((c) => c.domain !== 'fluid');
+    return [...fluids, ...signals];
+  }, [connections]);
 
   let previewPath: string | null = null;
   if (pendingWire) {
@@ -247,30 +315,34 @@ export const WorkbenchCanvas: React.FC<WorkbenchCanvasProps> = ({
     const pos = srcComp?.getPortWorldPosition(pendingWire.portId);
     if (pos) {
       const targetSide = pos.side === 'left' ? 'right' : 'left';
-      previewPath = buildCurvePath(
+      previewPath = buildPreviewOrthogonalPath(
         pos.x,
         pos.y,
         pos.side,
         cursorWorld.x,
         cursorWorld.y,
         targetSide
-      ).d;
+      );
     }
   }
+
+  const selectedRoute = selectedConnectionId ? routedWires.get(selectedConnectionId) : undefined;
 
   return (
     <main
       ref={containerRef}
+      onContextMenu={(e) => e.preventDefault()}
       onPointerDown={handleCanvasPointerDown}
       onPointerMove={handlePointerMove}
       onPointerUp={handlePointerUp}
+      onPointerCancel={handlePointerUp}
       onWheel={handleWheel}
       onDragOver={(e) => {
         e.preventDefault();
         e.dataTransfer.dropEffect = 'copy';
       }}
       onDrop={handleDrop}
-      className="relative flex-1 bg-[#0B111A] overflow-hidden select-none touch-none"
+      className="no-context-touch relative flex-1 bg-[#0B111A] overflow-hidden select-none touch-none"
       style={{
         backgroundImage: `radial-gradient(circle, #1E2D42 1px, transparent 1px)`,
         backgroundSize: `${24 * zoom}px ${24 * zoom}px`,
@@ -339,22 +411,16 @@ export const WorkbenchCanvas: React.FC<WorkbenchCanvasProps> = ({
               );
             })}
 
-          {/* Leitungen, Analogleitungen & Fluidrohre */}
-          {connections.map((conn) => {
-            const fromComp = compMap.get(conn.fromComponentId);
-            const toComp = compMap.get(conn.toComponentId);
-            if (!fromComp || !toComp) return null;
+          {/* 90° Leitungen, Analogleitungen & Fluidrohre mit Option-C-Kreuzungen */}
+          {orderedConnections.map((conn) => {
+            const route = routedWires.get(conn.id);
+            if (!route || !route.d) return null;
 
-            const p1 = fromComp.getPortWorldPosition(conn.fromPortId);
-            const p2 = toComp.getPortWorldPosition(conn.toPortId);
-            if (!p1 || !p2) return null;
-
-            const { d, midX, midY } = buildCurvePath(p1.x, p1.y, p1.side, p2.x, p2.y, p2.side);
+            const { d, midX, midY, gapMasks } = route;
             const isSelected = selectedConnectionId === conn.id;
             const isHovered = hoveredConnId === conn.id;
             const connFault = conn.fault ?? 'none';
 
-            // Fehlerdarstellung auf Leitung / Rohr
             if (connFault !== 'none') {
               const isShort = connFault === 'short_circuit';
               return (
@@ -369,6 +435,18 @@ export const WorkbenchCanvas: React.FC<WorkbenchCanvasProps> = ({
                   }}
                   className="cursor-pointer"
                 >
+                  {gapMasks.map((m, idx) => (
+                    <line
+                      key={idx}
+                      x1={m.x1}
+                      y1={m.y1}
+                      x2={m.x2}
+                      y2={m.y2}
+                      stroke="#0B111A"
+                      strokeWidth={16}
+                      strokeLinecap="butt"
+                    />
+                  ))}
                   <path d={d} fill="none" stroke="transparent" strokeWidth={18} />
                   <path
                     d={d}
@@ -376,6 +454,7 @@ export const WorkbenchCanvas: React.FC<WorkbenchCanvasProps> = ({
                     stroke={isShort ? '#EF4444' : '#F59E0B'}
                     strokeWidth={isSelected ? 4 : 2.8}
                     strokeDasharray="7 5"
+                    strokeLinejoin="round"
                   />
                   <g transform={`translate(${midX}, ${midY})`} className="pointer-events-none">
                     <rect
@@ -431,6 +510,7 @@ export const WorkbenchCanvas: React.FC<WorkbenchCanvasProps> = ({
                       stroke="#EF4444"
                       strokeOpacity={0.35}
                       strokeWidth={6}
+                      strokeLinejoin="round"
                       filter="url(#glow-red)"
                     />
                   )}
@@ -449,6 +529,7 @@ export const WorkbenchCanvas: React.FC<WorkbenchCanvasProps> = ({
                     }
                     strokeWidth={isSelected ? 3.5 : energized ? 2.8 : 2.2}
                     strokeLinecap="round"
+                    strokeLinejoin="round"
                   />
 
                   {energized && (
@@ -458,6 +539,7 @@ export const WorkbenchCanvas: React.FC<WorkbenchCanvasProps> = ({
                       stroke="#FCA5A5"
                       strokeWidth={1.6}
                       strokeDasharray="4 20"
+                      strokeLinejoin="round"
                       className="animate-electric-pulse pointer-events-none"
                     />
                   )}
@@ -489,6 +571,7 @@ export const WorkbenchCanvas: React.FC<WorkbenchCanvasProps> = ({
                       stroke="#10B981"
                       strokeOpacity={0.3}
                       strokeWidth={5.5}
+                      strokeLinejoin="round"
                       filter="url(#glow-emerald)"
                     />
                   )}
@@ -506,6 +589,7 @@ export const WorkbenchCanvas: React.FC<WorkbenchCanvasProps> = ({
                     }
                     strokeWidth={isSelected ? 3.2 : 2.4}
                     strokeLinecap="round"
+                    strokeLinejoin="round"
                   />
                   {(active || isSelected || isHovered) && (
                     <g transform={`translate(${midX}, ${midY})`} className="pointer-events-none">
@@ -537,9 +621,13 @@ export const WorkbenchCanvas: React.FC<WorkbenchCanvasProps> = ({
               );
             }
 
-            // Fluid-Rohrleitung
+            // Fluid-Rohrleitung (Anolyt/Wasser = Blau, Katholyt = Grün) + Option-C Unterbrechungslücke
             const flowLph = conn.flowRateLph ?? 0;
             const flowing = conn.active && flowLph > 0;
+            const isKat = conn.medium === 'katholyte';
+            const baseColor = isKat ? '#10B981' : '#0EA5E9';
+            const pulseColor = isKat ? '#A7F3D0' : '#BAE6FD';
+            const textColor = isKat ? '#6EE7B7' : '#7DD3FC';
 
             return (
               <g
@@ -553,6 +641,20 @@ export const WorkbenchCanvas: React.FC<WorkbenchCanvasProps> = ({
                 }}
                 className="cursor-pointer"
               >
+                {/* Option C: Saubere Unterbrechungslücke unter kreuzender Fluid-Leitung */}
+                {gapMasks.map((m, idx) => (
+                  <line
+                    key={idx}
+                    x1={m.x1}
+                    y1={m.y1}
+                    x2={m.x2}
+                    y2={m.y2}
+                    stroke="#0B111A"
+                    strokeWidth={16}
+                    strokeLinecap="butt"
+                  />
+                ))}
+
                 <path d={d} fill="none" stroke="transparent" strokeWidth={18} />
 
                 <path
@@ -561,35 +663,39 @@ export const WorkbenchCanvas: React.FC<WorkbenchCanvasProps> = ({
                   stroke={isSelected ? '#FBBF24' : '#1E293B'}
                   strokeWidth={8.5}
                   strokeLinecap="round"
+                  strokeLinejoin="round"
                 />
 
                 {flowing && (
                   <path
                     d={d}
                     fill="none"
-                    stroke="#0EA5E9"
+                    stroke={baseColor}
                     strokeOpacity={0.35}
                     strokeWidth={10}
-                    filter="url(#glow-blue)"
+                    strokeLinejoin="round"
+                    filter={isKat ? 'url(#glow-emerald)' : 'url(#glow-blue)'}
                   />
                 )}
 
                 <path
                   d={d}
                   fill="none"
-                  stroke={flowing ? '#0EA5E9' : isHovered ? '#64748B' : '#334155'}
+                  stroke={flowing ? baseColor : isHovered ? '#64748B' : '#334155'}
                   strokeWidth={4.5}
                   strokeLinecap="round"
+                  strokeLinejoin="round"
                 />
 
                 {flowing && (
                   <path
                     d={d}
                     fill="none"
-                    stroke="#BAE6FD"
+                    stroke={pulseColor}
                     strokeWidth={2.5}
                     strokeDasharray="8 20"
                     strokeLinecap="round"
+                    strokeLinejoin="round"
                     className="animate-fluid-flow pointer-events-none"
                   />
                 )}
@@ -597,26 +703,28 @@ export const WorkbenchCanvas: React.FC<WorkbenchCanvasProps> = ({
                 {(flowing || isSelected || isHovered) && (
                   <g transform={`translate(${midX}, ${midY})`} className="pointer-events-none">
                     <rect
-                      x="-28"
+                      x="-30"
                       y="-10"
-                      width="56"
+                      width="60"
                       height="18"
                       rx="4"
                       fill="#0B111A"
-                      fillOpacity={0.9}
-                      stroke={flowing ? '#0EA5E9' : '#334155'}
+                      fillOpacity={0.92}
+                      stroke={flowing ? baseColor : '#334155'}
                       strokeWidth="1"
                     />
                     <text
                       x="0"
                       y="2.5"
                       textAnchor="middle"
-                      fill={flowing ? '#7DD3FC' : '#94A3B8'}
+                      fill={flowing ? textColor : '#94A3B8'}
                       fontSize="9.5"
                       fontFamily="monospace"
                       fontWeight="600"
                     >
-                      {Math.round(flowLph)} L/h
+                      {flowLph < 10 && flowLph > 0
+                        ? `${flowLph.toFixed(1)} L/h`
+                        : `${Math.round(flowLph)} L/h`}
                     </text>
                   </g>
                 )}
@@ -624,7 +732,7 @@ export const WorkbenchCanvas: React.FC<WorkbenchCanvasProps> = ({
             );
           })}
 
-          {/* Gummiband-Vorschau */}
+          {/* Rechtwinklige Gummiband-Vorschau */}
           {previewPath && pendingWire && (
             <path
               d={previewPath}
@@ -656,11 +764,62 @@ export const WorkbenchCanvas: React.FC<WorkbenchCanvasProps> = ({
                 onSelectConnection(null);
                 onSelectComponent(id);
               }}
+              onOpenProperties={(id) => {
+                onSelectConnection(null);
+                onOpenProperties(id);
+              }}
               onPortClick={handlePortClick}
               onMutateComponent={onMutateComponent}
             />
           ))}
         </div>
+
+        {/* Schwebende Einzel-Trennen-Schaltfläche direkt an ausgewählter Leitung (mit Bestätigung) */}
+        {selectedConnectionId && selectedRoute && (
+          <div
+            style={{
+              left: `${selectedRoute.midX}px`,
+              top: `${selectedRoute.midY - 26}px`,
+            }}
+            onPointerDown={(e) => e.stopPropagation()}
+            onClick={(e) => e.stopPropagation()}
+            className="absolute -translate-x-1/2 -translate-y-full z-40 pointer-events-auto"
+          >
+            {confirmDisconnectId === selectedConnectionId ? (
+              <div className="flex items-center gap-1 bg-[#141E2E] border border-red-500/70 rounded-md px-2 py-1 shadow-xl text-[11px] whitespace-nowrap">
+                <span className="text-red-200 font-medium mr-1">Trennen?</span>
+                <button
+                  type="button"
+                  onClick={() => {
+                    onDeleteConnection(selectedConnectionId);
+                    setConfirmDisconnectId(null);
+                  }}
+                  className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded bg-red-600 hover:bg-red-500 text-white font-semibold cursor-pointer"
+                >
+                  <Check className="w-3 h-3" />
+                  <span>Ja</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setConfirmDisconnectId(null)}
+                  className="inline-flex items-center px-1.5 py-0.5 rounded bg-slate-700 hover:bg-slate-600 text-slate-200 cursor-pointer"
+                >
+                  <X className="w-3 h-3" />
+                </button>
+              </div>
+            ) : (
+              <button
+                type="button"
+                onClick={() => setConfirmDisconnectId(selectedConnectionId)}
+                title="Diese einzelne Leitung trennen"
+                className="inline-flex items-center gap-1 px-2 py-1 rounded-md bg-[#141E2E] border border-amber-400/70 text-amber-200 hover:bg-red-950/80 hover:border-red-400 hover:text-red-200 text-[11px] font-medium shadow-xl transition-colors cursor-pointer whitespace-nowrap"
+              >
+                <Trash2 className="w-3 h-3" />
+                <span>Leitung trennen</span>
+              </button>
+            )}
+          </div>
+        )}
       </div>
 
       {pendingWire && (
@@ -686,11 +845,9 @@ export const WorkbenchCanvas: React.FC<WorkbenchCanvasProps> = ({
       {components.length === 0 && (
         <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
           <div className="bg-[#101826]/90 border border-[#223044] rounded-lg px-6 py-5 text-center max-w-md">
-            <h3 className="text-sm font-semibold text-slate-100">
-              Arbeitsfläche ist leer
-            </h3>
+            <h3 className="text-sm font-semibold text-slate-100">Arbeitsfläche ist leer</h3>
             <p className="text-xs text-slate-400 mt-1.5 leading-relaxed">
-              Ziehen Sie Bauteile aus der linken Bibliothek auf die Fläche, klicken Sie Klemmen zum Verdrahten an und starten Sie die Simulation oben.
+              Ziehen Sie Bauteile aus der linken Bibliothek auf die Fläche, klicken Sie Klemmen zum Verdrahten an und speichern Sie fertige Anlagen oben in der Liste.
             </p>
           </div>
         </div>

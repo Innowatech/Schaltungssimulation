@@ -1,6 +1,7 @@
 export type PortDomain = 'electrical' | 'fluid' | 'analog';
 export type PortDirection = 'input' | 'output';
 export type PortSide = 'left' | 'right' | 'top' | 'bottom';
+export type FluidMedium = 'water' | 'anolyte' | 'katholyte';
 
 export type ComponentCategory = 'electric' | 'relay' | 'logic' | 'fluid' | 'sensor';
 
@@ -41,6 +42,9 @@ export interface ElectricalSignal {
   domain: 'electrical';
   voltage: number; // 24 or 0
   energized: boolean;
+  /** Impuls-Metadaten für hochfrequente Zähler bei hohem Zeitraffer */
+  pulseDeltaCount?: number;
+  pulseRatePerHour?: number;
 }
 
 export interface FluidSignal {
@@ -48,6 +52,7 @@ export interface FluidSignal {
   flowRateLph: number;
   hasPressure: boolean;
   backpressureFull: boolean;
+  medium?: FluidMedium;
 }
 
 export interface AnalogSignal {
@@ -72,6 +77,7 @@ export interface Connection {
   active: boolean;
   voltage?: number;
   flowRateLph?: number;
+  medium?: FluidMedium;
   analogValue?: number;
   analogUnit?: 'mA' | 'V';
 }
@@ -92,8 +98,15 @@ export interface SerializedCircuit {
   name: string;
   components: SerializedComponent[];
   connections: Array<
-    Omit<Connection, 'active' | 'voltage' | 'flowRateLph' | 'analogValue' | 'analogUnit'>
+    Omit<Connection, 'active' | 'voltage' | 'flowRateLph' | 'analogValue' | 'analogUnit' | 'medium'>
   >;
+}
+
+export interface SavedSimulationEntry {
+  id: string;
+  name: string;
+  updatedAt: string;
+  circuit: SerializedCircuit;
 }
 
 export interface ComponentMetadata {
@@ -104,6 +117,7 @@ export interface ComponentMetadata {
   width: number;
   height: number;
   defaultLabelPrefix: string;
+  hidden?: boolean;
 }
 
 export interface SimulationContext {

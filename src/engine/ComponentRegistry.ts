@@ -1,11 +1,17 @@
 import { SimComponent } from './SimComponent';
 import {
+  DosingPumpComponent,
   DrainConsumerComponent,
   FloatProbeComponent,
+  FluidTeeComponent,
   GeneratorComponent,
+  GullyDrainComponent,
+  InjectionPointComponent,
+  MainWaterLineComponent,
   SolenoidValve22Component,
   SolenoidValve32Component,
   TankComponent,
+  WaterMeterComponent,
 } from './components/FluidComponents';
 import { PowerSupply24V, SwitchComponent } from './components/PowerAndSwitch';
 import { ContactorRelayComponent, TimerRelayComponent } from './components/Relays';
@@ -32,7 +38,7 @@ class Registry {
   }
 
   public getAll(): RegisteredComponentEntry[] {
-    return Array.from(this.entries.values());
+    return Array.from(this.entries.values()).filter((e) => !e.meta.hidden);
   }
 
   public getMeta(type: string): ComponentMetadata | undefined {
@@ -107,12 +113,12 @@ ComponentRegistry.register(
 ComponentRegistry.register(
   {
     type: 'timer_relay',
-    name: 'Zeitrelais',
-    shortDescription: 'Ansprech-/Rückfallverzögert oder Taktgeber (A1, 15-16-18)',
+    name: 'Zeitrelais (TELE E1ZM10)',
+    shortDescription: 'Multifunktion E/R/Ws/Wa/Es/Wu/Bp, 7 Zeitbereiche (1s–100h), A1/B1/15-16-18',
     category: 'relay',
-    width: 196,
-    height: 148,
-    defaultLabelPrefix: 'K1 Zeitrelais',
+    width: 208,
+    height: 172,
+    defaultLabelPrefix: 'K1 E1ZM10',
   },
   (id, label, x, y) => new TimerRelayComponent(id, label, x, y)
 );
@@ -199,15 +205,173 @@ ComponentRegistry.register(
 // Fluidik & Sensorik
 ComponentRegistry.register(
   {
+    type: 'anolyte_tank',
+    name: 'Anolyte-Tank (Blau)',
+    shortDescription: 'Anolyt-Behälter inkl. 3/5-Punkt Schwimmerlanze & 0–4 Sauglanzen',
+    category: 'fluid',
+    width: 224,
+    height: 264,
+    defaultLabelPrefix: 'B1 Anolyte-Tank',
+  },
+  (id, label, x, y) => new TankComponent(id, label, x, y, 'anolyte_tank')
+);
+
+ComponentRegistry.register(
+  {
+    type: 'katholyte_tank',
+    name: 'Katholyte-Tank (Grün)',
+    shortDescription: 'Katholyt-Behälter (Lanze optional zuschaltbar) & 0–4 Sauglanzen',
+    category: 'fluid',
+    width: 224,
+    height: 264,
+    defaultLabelPrefix: 'B2 Katholyte-Tank',
+  },
+  (id, label, x, y) => new TankComponent(id, label, x, y, 'katholyte_tank')
+);
+
+// Legacy Tank für alte JSON-Dateien
+ComponentRegistry.register(
+  {
     type: 'tank',
-    name: 'Tank mit Schwimmerlanze',
-    shortDescription: 'Behälter mit integrierter Schwimmerlanze (3 oder 5 Schaltpunkte)',
+    name: 'Tank (Legacy)',
+    shortDescription: 'Kompatibilitätstank',
+    category: 'fluid',
+    width: 224,
+    height: 264,
+    defaultLabelPrefix: 'B1 Tank',
+    hidden: true,
+  },
+  (id, label, x, y) => new TankComponent(id, label, x, y, 'tank')
+);
+
+ComponentRegistry.register(
+  {
+    type: 'generator',
+    name: 'Erzeuger-Anlage',
+    shortDescription: 'Produziert Anolyt (Blau) & Katholyt (Grün) getrennt + Hand-Stopp',
     category: 'fluid',
     width: 216,
-    height: 260,
-    defaultLabelPrefix: 'B1 Tank',
+    height: 176,
+    defaultLabelPrefix: 'P1 Erzeuger',
   },
-  (id, label, x, y) => new TankComponent(id, label, x, y)
+  (id, label, x, y) => new GeneratorComponent(id, label, x, y)
+);
+
+ComponentRegistry.register(
+  {
+    type: 'dosing_pump',
+    name: 'Dosierpumpe (Grundfos DDA)',
+    shortDescription: 'DDA 17-7 bis 200-4 · Manuell / Kontakt-Impuls / 4–20mA Analogprofil',
+    category: 'fluid',
+    width: 220,
+    height: 186,
+    defaultLabelPrefix: 'P2 DDA-Pumpe',
+  },
+  (id, label, x, y) => new DosingPumpComponent(id, label, x, y)
+);
+
+ComponentRegistry.register(
+  {
+    type: 'main_water_line',
+    name: 'Hauptleitung (Rohwasser)',
+    shortDescription: 'Rohwasser-Volumenstrom (L/h & m³/h) zur Impfung',
+    category: 'fluid',
+    width: 196,
+    height: 124,
+    defaultLabelPrefix: 'W1 Hauptleitung',
+  },
+  (id, label, x, y) => new MainWaterLineComponent(id, label, x, y)
+);
+
+ComponentRegistry.register(
+  {
+    type: 'water_meter',
+    name: 'Kontakt-Wasserzähler',
+    shortDescription: 'Misst Durchfluss, zählt Volumen & sendet 24V-Impulse / 4–20mA',
+    category: 'sensor',
+    width: 208,
+    height: 152,
+    defaultLabelPrefix: 'B3 Wasserzähler',
+  },
+  (id, label, x, y) => new WaterMeterComponent(id, label, x, y)
+);
+
+ComponentRegistry.register(
+  {
+    type: 'injection_point',
+    name: 'Impfstelle',
+    shortDescription: 'Mischt Dosiermittel in den Hauptstrom & berechnet Konzentration',
+    category: 'fluid',
+    width: 200,
+    height: 132,
+    defaultLabelPrefix: 'I1 Impfstelle',
+  },
+  (id, label, x, y) => new InjectionPointComponent(id, label, x, y)
+);
+
+ComponentRegistry.register(
+  {
+    type: 'fluid_tee',
+    name: 'T-Stück (Fluid)',
+    shortDescription: 'Verteilt (1→2) oder sammelt (2→1) Rohrleitungen',
+    category: 'fluid',
+    width: 148,
+    height: 110,
+    defaultLabelPrefix: 'T1 T-Stück',
+  },
+  (id, label, x, y) => new FluidTeeComponent(id, label, x, y)
+);
+
+ComponentRegistry.register(
+  {
+    type: 'valve_32',
+    name: '3/2-Wege-Magnetventil',
+    shortDescription: 'Schaltet Eingang P zwischen Ausgang A (NC) und B (NO, z. B. Gulli)',
+    category: 'fluid',
+    width: 196,
+    height: 136,
+    defaultLabelPrefix: 'Y1 3/2-Ventil',
+  },
+  (id, label, x, y) => new SolenoidValve32Component(id, label, x, y)
+);
+
+ComponentRegistry.register(
+  {
+    type: 'valve_22',
+    name: '2/2-Wege-Magnetventil',
+    shortDescription: 'Absperrventil P → A mit einstellbarem Durchfluss (NC / NO)',
+    category: 'fluid',
+    width: 186,
+    height: 124,
+    defaultLabelPrefix: 'Y2 2/2-Ventil',
+  },
+  (id, label, x, y) => new SolenoidValve22Component(id, label, x, y)
+);
+
+ComponentRegistry.register(
+  {
+    type: 'gully_drain',
+    name: 'Gulli / Ablauf',
+    shortDescription: 'Verwurf-Ablauf für Katholyt-Bypass oder Tank-Entleerung',
+    category: 'fluid',
+    width: 164,
+    height: 112,
+    defaultLabelPrefix: 'G1 Gulli',
+  },
+  (id, label, x, y) => new GullyDrainComponent(id, label, x, y)
+);
+
+ComponentRegistry.register(
+  {
+    type: 'drain_consumer',
+    name: 'Verbraucher (24V gesteuert)',
+    shortDescription: 'Entnimmt bei 24V Ansteuerung X Liter/Stunde aus einem Tank',
+    category: 'fluid',
+    width: 188,
+    height: 128,
+    defaultLabelPrefix: 'V1 Verbraucher',
+  },
+  (id, label, x, y) => new DrainConsumerComponent(id, label, x, y)
 );
 
 ComponentRegistry.register(
@@ -221,56 +385,4 @@ ComponentRegistry.register(
     defaultLabelPrefix: 'S2 Schwimmer',
   },
   (id, label, x, y) => new FloatProbeComponent(id, label, x, y)
-);
-
-ComponentRegistry.register(
-  {
-    type: 'generator',
-    name: 'Erzeuger-Anlage',
-    shortDescription: 'Produziert L/h bei 24V Freigabe (Stopp bei Sperre / Tank Voll)',
-    category: 'fluid',
-    width: 196,
-    height: 140,
-    defaultLabelPrefix: 'P1 Erzeuger',
-  },
-  (id, label, x, y) => new GeneratorComponent(id, label, x, y)
-);
-
-ComponentRegistry.register(
-  {
-    type: 'valve_32',
-    name: '3/2-Wege-Magnetventil',
-    shortDescription: 'Schaltet Fluid-Eingang P zwischen Ausgang A (NC) und B (NO)',
-    category: 'fluid',
-    width: 196,
-    height: 136,
-    defaultLabelPrefix: 'Y1 3/2-Ventil',
-  },
-  (id, label, x, y) => new SolenoidValve32Component(id, label, x, y)
-);
-
-ComponentRegistry.register(
-  {
-    type: 'valve_22',
-    name: '2/2-Wege-Magnetventil',
-    shortDescription: 'Absperrventil P → A (konfigurierbar als NC oder NO)',
-    category: 'fluid',
-    width: 186,
-    height: 120,
-    defaultLabelPrefix: 'Y2 2/2-Ventil',
-  },
-  (id, label, x, y) => new SolenoidValve22Component(id, label, x, y)
-);
-
-ComponentRegistry.register(
-  {
-    type: 'drain_consumer',
-    name: 'Ablassventil / Verbraucher',
-    shortDescription: 'Entnimmt bei 24V Ansteuerung X Liter/Stunde aus einem Tank',
-    category: 'fluid',
-    width: 188,
-    height: 128,
-    defaultLabelPrefix: 'V1 Verbraucher',
-  },
-  (id, label, x, y) => new DrainConsumerComponent(id, label, x, y)
 );

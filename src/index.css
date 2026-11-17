@@ -58,6 +58,13 @@
   transform-origin: center;
 }
 
+.no-context-touch {
+  -webkit-touch-callout: none;
+  -webkit-user-select: none;
+  user-select: none;
+  touch-action: none;
+}
+
 /* Custom sleek scrollbars for side panels */
 ::-webkit-scrollbar {
   width: 6px;

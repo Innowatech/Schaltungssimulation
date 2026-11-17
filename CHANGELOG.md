@@ -1,8 +1,22 @@
 # Changelog — Mechatronik & Fluidik Baukasten
 
-Alle Änderungen an diesem Projekt werden fortlaufend mit den Versionsnummern `1.0`, `1.1`, `1.2`, `1.3`, `1.4`, `1.5`, `1.6`, `1.7` usw. dokumentiert.
+Alle Änderungen an diesem Projekt werden fortlaufend mit den Versionsnummern `1.0`, `1.1`, `1.2`, `1.3`, `1.4`, `1.5`, `1.6`, `1.7`, `1.8` usw. dokumentiert.
 
-## [1.7] — Aktuelle Version
+## [1.8] — Aktuelle Version
+### Hinzugefügt & Verbessert
+- **TELE ENYA E1ZM10 Multifunktions-Zeitrelais (nach Datenblatt)**: Originalgetreue Klemmen (`A1`, `B1` Steuerkontakt, Wechsler `15–16–18`), alle 7 Funktionen (`E` Einschaltverzögert, `R` Rückfallverzögert, `Ws` Einschaltwischend, `Wa` Ausschaltwischend, `Es` Einschaltverzögert mit Steuerkontakt, `Wu` Einschaltwischend spannungsgesteuert, `Bp` Blinker pausenbeginnend), alle 7 Zeitbereiche (`1s` [50ms–1s] bis `100h` [5h–100h]), 5–100%-Skala sowie `U/t`- und `R`-LED-Statusanzeige.
+- **Ergonomie & Bedienung**:
+  - Bauteile lassen sich über eine **5-Pixel-Bewegungsschwelle** flüssig verschieben; alle angeschlossenen Leitungen wandern mit.
+  - Browser-/Touch-Kontextmenü am Baustein deaktiviert; das **Zahnrad-Symbol** am Baustein öffnet direkt die Eigenschaften.
+  - **90°-Orthogonales Routing**: Rechtwinklige Leitungsführung mit automatischer Abstandstrennung, Brücken-Sprungbogen bei Elektrik/Analog und Unterbrechungslücke bei kreuzenden Fluidrohren.
+  - **Einzelnes Trennen mit Bestätigung**: Jede Leitung einzeln an der ausgewählten Leitung oder pro Klemme im Eigenschaften-Panel nach `Ja/Nein`-Bestätigung lösbar.
+- **Leerer Start, Speicherliste & PDF-Plan-Viewer**: Start mit leerer Arbeitsfläche, lokale Simulations-Speicherliste (`localStorage`) und integrierter lokaler PDF-/Bild-Betrachter (`PDF-Plan`) zum direkten Nachbauen.
+- **Erzeuger, Tanks & Dosiertechnik**:
+  - **Erzeuger**: Getrennte Produktionsmengen für **Anolyte (blau)** und **Katholyte (grün)**, direkter Hand-Stopp-Taster, MIN/MAX-Hysterese (Anolyte ist führend; Überschuss-Katholyte wird über 3/2-Wege-Ventil in den Gulli geführt).
+  - **Anolyte- & Katholyte-Tanks**: Konfigurierbare Schwimmerlanzen (inkl. Kontakte je Schaltpunkt invertierbar) und 0–4 Sauglanzen-Anschlüsse.
+  - **Neue Bauteile**: **Gulli / Ablauf**, **Hauptwasserleitung**, **Wasserzähler** (Impuls-Taktung + 4–20mA), **Dosierpumpe (Grundfos DDA 17-7 / 60-10 / 120-7 / 200-4)**, **T-Stück** (`1→2` / `2→1`) und **Impfstelle** (inkl. Direkt-Einfügen in bestehende Rohre und `mL/m³`-Konzentrationsberechnung).
+
+## [1.7]
 ### Behoben
 - **GitHub Actions `ERESOLVE`-Fehler**: `npm install --legacy-peer-deps` in `.github/workflows/deploy.yml` ergänzt, um den optionalen Peer-Dependency-Konflikt zwischen `vite@8` und `esbuild@0.25` sauber aufzulösen.
 - **Vite 8 Config**: `__dirname` in `vite.config.ts` auf `import.meta.dirname` umgestellt.

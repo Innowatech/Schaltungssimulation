@@ -5,9 +5,24 @@ export interface ChangelogEntry {
   changes: string[];
 }
 
-export const CURRENT_VERSION = '1.7';
+export const CURRENT_VERSION = '1.8';
 
 export const CHANGELOG_ENTRIES: ChangelogEntry[] = [
+  {
+    version: '1.8',
+    title: 'Großes Fluidik-, TELE-Zeitrelais- & Ergonomie-Update',
+    date: '2026-11-17',
+    changes: [
+      'Bedienung: 5-Pixel-Schwelle zum flüssigen Verschieben angeschlossener Bausteine (Leitungen ziehen mit), Kontextmenü am Baustein deaktiviert, Zahnrad-Button öffnet direkt die Eigenschaften.',
+      'Rechtwinklige Leitungsführung (90° Manhattan-Routing) mit parallelen Leitungsbahnen sowie eindeutigen Kreuzungen (Brückensprung für Elektrik/Analog, Unterbrechungslücke für Fluidrohre).',
+      'Einzelne Leitungen lassen sich per Sicherheitsabfrage (Ja/Nein) sowohl direkt an der Leitung als auch pro Klemme im Eigenschaften-Panel trennen.',
+      'Leere Start-Arbeitsfläche, lokales Speichern/Verwalten eigener Simulationen in der Dropdown-Liste und lokaler PDF-/Bild-Schaltplan-Betrachter („PDF-Plan“).',
+      'TELE ENYA E1ZM10 Zeitrelais exakt nach Datenblatt: Klemmen A1/B1/15–16–18, 7 Funktionen (E, R, Ws, Wa, Es, Wu, Bp), 7 Zeitbereiche (1s bis 100h), 5–100%-Skala und U/t- sowie R-LED.',
+      'Erzeuger getrennt für Anolyte (blau) & Katholyte (grün) mit direktem Hand-Stopp-Schalter und MIN/MAX-Selbsthalte-Logik (Anolyte ist führend; Katholyte wird über 3/2-Wege-Ventil in den Gulli geleitet).',
+      'Anolyte- & Katholyte-Tanks mit konfigurierbaren Schwimmerlanzen (0/3/4/5 Schaltpunkte, Kontakte je Punkt invertierbar) sowie 0–4 Sauglanzen-Anschlüssen.',
+      'Neue Fluid-Bauteile: Gulli/Ablauf (animiert), Hauptwasserleitung, Wasserzähler (einstellbare Taktung in L/Impuls & Impulslänge + 4–20mA), Grundfos DDA Dosierpumpe (17-7, 60-10, 120-7, 200-4 mit 4–20mA/Puls/Manuell), T-Stück (1→2 / 2→1) und Impfstelle (direkt in bestehende Leitungen einfügbar, inkl. mL/m³-Berechnung).',
+    ],
+  },
   {
     version: '1.7',
     title: 'GitHub Actions Peer-Dependency-Fix',
