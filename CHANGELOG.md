@@ -1,8 +1,12 @@
 # Changelog — Mechatronik & Fluidik Baukasten
 
-Alle Änderungen an diesem Projekt werden fortlaufend mit den Versionsnummern `1.0`, `1.1`, `1.2`, `1.3`, `1.4`, `1.5` usw. dokumentiert.
+Alle Änderungen an diesem Projekt werden fortlaufend mit den Versionsnummern `1.0`, `1.1`, `1.2`, `1.3`, `1.4`, `1.5`, `1.6` usw. dokumentiert.
 
-## [1.5] — Aktuelle Version
+## [1.6] — Aktuelle Version
+### Behoben
+- **GitHub Actions Build**: `cache: npm` und hartes `npm ci` in `.github/workflows/deploy.yml` durch automatische Lockfile-Prüfung (`npm ci` falls `package-lock.json` vorhanden, sonst `npm install`) ersetzt, damit der Build auch ohne `package-lock.json` sauber durchläuft.
+
+## [1.5]
 ### Hinzugefügt
 - **Installierbare PWA (PC & Smartphone)**: Vollständiges Web App Manifest (`standalone`), Service Worker mit Offline-Caching, hochauflösende App-Icons (`any`, `maskable`, `apple-touch-icon`), In-App-Installationsbutton (inkl. iOS-Safari-Anleitung) sowie Offline-Statusanzeige.
 - **GitHub Pages Release-Workflow**: Automatisierte Build- und Deployment-Pipeline unter `.github/workflows/deploy.yml` mit dynamischer `base`-Pfad-Erkennung.

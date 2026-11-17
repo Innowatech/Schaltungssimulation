@@ -5,9 +5,17 @@ export interface ChangelogEntry {
   changes: string[];
 }
 
-export const CURRENT_VERSION = '1.5';
+export const CURRENT_VERSION = '1.6';
 
 export const CHANGELOG_ENTRIES: ChangelogEntry[] = [
+  {
+    version: '1.6',
+    title: 'GitHub Actions Build-Fix (ohne package-lock.json)',
+    date: '2026-11-17',
+    changes: [
+      'GitHub Pages Workflow korrigiert: Fehlermeldung wegen fehlender package-lock.json behoben (automatischer Fallback auf npm install).',
+    ],
+  },
   {
     version: '1.5',
     title: 'Installierbare App (PWA), Mobile-Ansicht & GitHub Pages',
