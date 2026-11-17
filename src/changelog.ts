@@ -5,9 +5,17 @@ export interface ChangelogEntry {
   changes: string[];
 }
 
-export const CURRENT_VERSION = '1.13';
+export const CURRENT_VERSION = '1.14';
 
 export const CHANGELOG_ENTRIES: ChangelogEntry[] = [
+  {
+    version: '1.14',
+    title: 'Leitungs-Normalisierung für externe JSON-Projekte (Leuchten & Stromfluss)',
+    date: '2026-11-17',
+    changes: [
+      'Automatische Leitungs-Ausrichtungs-Normalisierung beim Import externer JSON-Schaltpläne (wie katholyte.json): Alle Anschlüsse zwischen Netzteilen, Zeitrelais und Ventilen werden nun präzise von Ausgang zu Eingang geroutet, sodass beim Einschalten des Netzteils alle Leitungen korrekt rot aufleuchten und die Schaltung sofort fehlerfrei simuliert wird.',
+    ],
+  },
   {
     version: '1.13',
     title: 'Intelligenter JSON-Projekt-Adapter (z. B. für katholyte.json)',

@@ -17,7 +17,7 @@ export function parseExternalProjectJson(rawText: string): SerializedCircuit | n
     if (parsed && typeof parsed === 'object' && Array.isArray(parsed.components)) {
       const compMap = new Map<string, { internalId: string; type: string; raw: any }>();
       const serializedComps: SerializedComponent[] = [];
-      const rawConns: Array<{ fromComp: string; fromPort: string; toTarget: string }> = [];
+      const rawConns: Array<{ compA: string; portA: string; compB: string; portB: string }> = [];
 
       let gridX = 80;
       let gridY = 80;
@@ -32,6 +32,7 @@ export function parseExternalProjectJson(rawText: string): SerializedCircuit | n
         const extType = String(item.type || '').toLowerCase();
         if (extType.includes('voltage') || extType.includes('power')) {
           internalAppType = 'power_24v';
+          defaultParams = { enabled: true, voltage: 24 };
           label = `Netzteil ${extId}`;
         } else if (extType.includes('tele') || extType.includes('e1zm10')) {
           internalAppType = 'timer_relay';
@@ -81,6 +82,28 @@ export function parseExternalProjectJson(rawText: string): SerializedCircuit | n
         col++;
       }
 
+      // Helper to map port string to internal app port id
+      const mapPort = (metaType: string, rawPort: string): string => {
+        const p = rawPort.toLowerCase();
+        if (metaType === 'power_24v') return 'out_24v';
+        if (metaType === 'timer_relay') {
+          if (p === 'a1' || p === 'l') return 'a1';
+          if (p === 'b1') return 'b1';
+          if (p === '15' || p === 'l') return 'com_15';
+          if (p === '16') return 'nc_16';
+          if (p === '18' || p === 'coil' || p === 'l') return 'no_18';
+        }
+        if (metaType === 'valve_32' || metaType === 'valve_22') return 'v24_in';
+        return p;
+      };
+
+      // Helper to check if port is an output
+      const isOutputPort = (metaType: string, portId: string): boolean => {
+        if (metaType === 'power_24v') return true;
+        if (metaType === 'timer_relay') return portId === 'nc_16' || portId === 'no_18';
+        return false;
+      };
+
       // Verbindungen parsen
       for (const item of parsed.components) {
         const extId = String(item.id || '');
@@ -90,45 +113,37 @@ export function parseExternalProjectJson(rawText: string): SerializedCircuit | n
         for (const [portKey, targetRef] of Object.entries(item.connections)) {
           if (!targetRef || typeof targetRef !== 'string') continue;
 
-          // Mappe Port-Key auf App-Port-ID
-          let srcPortId = portKey.toLowerCase();
-          if (srcMeta.type === 'timer_relay') {
-            if (srcPortId === 'a1') srcPortId = 'a1';
-            else if (srcPortId === 'b1') srcPortId = 'b1';
-            else if (srcPortId === '15') srcPortId = 'com_15';
-            else if (srcPortId === '16') srcPortId = 'nc_16';
-            else if (srcPortId === '18') srcPortId = 'no_18';
-          } else if (srcMeta.type === 'power_24v') {
-            srcPortId = 'out_24v';
-          } else if (srcMeta.type === 'valve_32' || srcMeta.type === 'valve_22') {
-            srcPortId = 'v24_in';
-          }
-
-          // Ziel parsen (z.B. "power_supply.L" oder "K3.B1" oder "valve_3_2.coil")
           const parts = targetRef.split('.');
           const targetExtId = parts[0];
-          const targetPortKey = (parts[1] || '').toLowerCase();
-
+          const targetPortKey = parts[1] || '';
           const targetMeta = compMap.get(targetExtId);
           if (!targetMeta) continue;
 
-          let dstPortId = targetPortKey;
-          if (targetMeta.type === 'power_24v') {
-            dstPortId = 'out_24v';
-          } else if (targetMeta.type === 'timer_relay') {
-            if (dstPortId === 'a1' || targetPortKey === 'l') dstPortId = 'a1';
-            else if (dstPortId === 'b1') dstPortId = 'b1';
-            else if (dstPortId === '15' || targetPortKey === 'l') dstPortId = 'com_15';
-            else if (dstPortId === '16') dstPortId = 'nc_16';
-            else if (dstPortId === '18' || targetPortKey === 'coil' || targetPortKey === 'l') dstPortId = 'no_18';
-          } else if (targetMeta.type === 'valve_32' || targetMeta.type === 'valve_22') {
-            dstPortId = 'v24_in';
+          const portAId = mapPort(srcMeta.type, portKey);
+          const portBId = mapPort(targetMeta.type, targetPortKey);
+
+          // Bestimme, ob A Output und B Input ist, oder umgekehrt (Stromfluss von Output -> Input)
+          let fromComp = srcMeta.internalId;
+          let fromPort = portAId;
+          let toComp = targetMeta.internalId;
+          let toPort = portBId;
+
+          const aIsOut = isOutputPort(srcMeta.type, portAId);
+          const bIsOut = isOutputPort(targetMeta.type, portBId);
+
+          if (bIsOut && !aIsOut) {
+            // Target ist Output, Source ist Input -> Richtung umdrehen
+            fromComp = targetMeta.internalId;
+            fromPort = portBId;
+            toComp = srcMeta.internalId;
+            toPort = portAId;
           }
 
           rawConns.push({
-            fromComp: srcMeta.internalId,
-            fromPort: srcPortId,
-            toTarget: `${targetMeta.internalId}:${dstPortId}`,
+            compA: fromComp,
+            portA: fromPort,
+            compB: toComp,
+            portB: toPort,
           });
         }
       }
@@ -138,19 +153,19 @@ export function parseExternalProjectJson(rawText: string): SerializedCircuit | n
       const seen = new Set<string>();
 
       for (const rc of rawConns) {
-        const [toComp, toPort] = rc.toTarget.split(':');
-        const key1 = `${rc.fromComp}:${rc.fromPort}-${toComp}:${toPort}`;
-        const key2 = `${toComp}:${toPort}-${rc.fromComp}:${rc.fromPort}`;
-        if (seen.has(key1) || seen.has(key2) || rc.fromComp === toComp) continue;
+        if (rc.compA === rc.compB) continue;
+        const key1 = `${rc.compA}:${rc.portA}-${rc.compB}:${rc.portB}`;
+        const key2 = `${rc.compB}:${rc.portB}-${rc.compA}:${rc.portA}`;
+        if (seen.has(key1) || seen.has(key2)) continue;
         seen.add(key1);
 
         serializedConns.push({
           id: `conn_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`,
           domain: 'electrical',
-          fromComponentId: rc.fromComp,
-          fromPortId: rc.fromPort,
-          toComponentId: toComp,
-          toPortId: toPort,
+          fromComponentId: rc.compA,
+          fromPortId: rc.portA,
+          toComponentId: rc.compB,
+          toPortId: rc.portB,
           fault: 'none',
         });
       }
