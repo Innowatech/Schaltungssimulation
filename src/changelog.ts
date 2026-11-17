@@ -5,9 +5,17 @@ export interface ChangelogEntry {
   changes: string[];
 }
 
-export const CURRENT_VERSION = '1.14';
+export const CURRENT_VERSION = '1.15';
 
 export const CHANGELOG_ENTRIES: ChangelogEntry[] = [
+  {
+    version: '1.15',
+    title: 'Automatischer 24V-Potentialverteiler (Klemmblock X1) beim JSON-Import',
+    date: '2026-11-17',
+    changes: [
+      'Automatischer Schaltschrank-Potentialverteiler: Beim Import externer Schaltpläne (wie katholyte.json) wird nun vollautomatisch ein zentraler 24V-Klemmblock (X1 24V-Potentialverteiler) zwischen Netzteil und Verbraucher geschaltet. Alle 24V-Versorgungsleitungen werden sauber über die Klemmen des Verteilers geleitet anstelle einer unübersichtlichen Direkt-Verdrahtung am Netzteil.',
+    ],
+  },
   {
     version: '1.14',
     title: 'Leitungs-Normalisierung für externe JSON-Projekte (Leuchten & Stromfluss)',

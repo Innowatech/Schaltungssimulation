@@ -23,6 +23,9 @@ export function parseExternalProjectJson(rawText: string): SerializedCircuit | n
       let gridY = 80;
       let col = 0;
 
+      let powerSupplyExtId: string | null = null;
+      let powerSupplyInternalId: string | null = null;
+
       for (const item of parsed.components) {
         const extId = String(item.id || `comp_${Math.random()}`);
         let internalAppType = 'power_24v';
@@ -34,6 +37,7 @@ export function parseExternalProjectJson(rawText: string): SerializedCircuit | n
           internalAppType = 'power_24v';
           defaultParams = { enabled: true, voltage: 24 };
           label = `Netzteil ${extId}`;
+          powerSupplyExtId = extId;
         } else if (extType.includes('tele') || extType.includes('e1zm10')) {
           internalAppType = 'timer_relay';
           const mode = String(item.mode || 'E').toUpperCase();
@@ -67,6 +71,9 @@ export function parseExternalProjectJson(rawText: string): SerializedCircuit | n
         }
 
         const internalId = `comp_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`;
+        if (internalAppType === 'power_24v') {
+          powerSupplyInternalId = internalId;
+        }
         compMap.set(extId, { internalId, type: internalAppType, raw: item });
 
         serializedComps.push({
@@ -82,6 +89,33 @@ export function parseExternalProjectJson(rawText: string): SerializedCircuit | n
         col++;
       }
 
+      // Automatischer 24V-Potentialverteiler (Klemmblock X1) einfügen
+      let terminalBlockInternalId: string | null = null;
+      if (powerSupplyInternalId && powerSupplyExtId) {
+        terminalBlockInternalId = `comp_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`;
+        const psComp = serializedComps.find((c) => c.id === powerSupplyInternalId);
+        const tbX = psComp ? psComp.x + 280 : 360;
+        const tbY = psComp ? psComp.y : 80;
+
+        serializedComps.push({
+          id: terminalBlockInternalId,
+          type: 'terminal_block',
+          x: tbX,
+          y: tbY,
+          label: 'X1 24V-Potentialverteiler',
+          params: { outputCount: 10 },
+          fault: 'none',
+        });
+
+        // Verbindung Netzteil -> Klemmblock Eingang
+        rawConns.push({
+          compA: powerSupplyInternalId,
+          portA: 'out_24v',
+          compB: terminalBlockInternalId,
+          portB: 'in_24v',
+        });
+      }
+
       // Helper to map port string to internal app port id
       const mapPort = (metaType: string, rawPort: string): string => {
         const p = rawPort.toLowerCase();
@@ -94,15 +128,19 @@ export function parseExternalProjectJson(rawText: string): SerializedCircuit | n
           if (p === '18' || p === 'coil' || p === 'l') return 'no_18';
         }
         if (metaType === 'valve_32' || metaType === 'valve_22') return 'v24_in';
+        if (metaType === 'terminal_block') return 'out_1';
         return p;
       };
 
       // Helper to check if port is an output
       const isOutputPort = (metaType: string, portId: string): boolean => {
         if (metaType === 'power_24v') return true;
+        if (metaType === 'terminal_block' && portId.startsWith('out_')) return true;
         if (metaType === 'timer_relay') return portId === 'nc_16' || portId === 'no_18';
         return false;
       };
+
+      let terminalOutputIndex = 1;
 
       // Verbindungen parsen
       for (const item of parsed.components) {
@@ -113,6 +151,29 @@ export function parseExternalProjectJson(rawText: string): SerializedCircuit | n
         for (const [portKey, targetRef] of Object.entries(item.connections)) {
           if (!targetRef || typeof targetRef !== 'string') continue;
 
+          // Prüfe, ob das Ziel direkt auf die Spannungsquelle verweist
+          const targetLower = targetRef.toLowerCase();
+          const isPowerTarget =
+            powerSupplyExtId &&
+            (targetLower.startsWith(`${powerSupplyExtId.toLowerCase()}.`) ||
+              targetLower.includes('power_supply') ||
+              targetLower.endsWith('.l') ||
+              targetLower.endsWith('.plus'));
+
+          if (isPowerTarget && terminalBlockInternalId) {
+            // Über den zentralen 24V-Potentialverteiler (X1) leiten!
+            const portAId = mapPort(srcMeta.type, portKey);
+            const tbPortId = `out_${Math.min(10, terminalOutputIndex++)}`;
+
+            rawConns.push({
+              compA: terminalBlockInternalId,
+              portA: tbPortId,
+              compB: srcMeta.internalId,
+              portB: portAId,
+            });
+            continue;
+          }
+
           const parts = targetRef.split('.');
           const targetExtId = parts[0];
           const targetPortKey = parts[1] || '';
@@ -122,7 +183,6 @@ export function parseExternalProjectJson(rawText: string): SerializedCircuit | n
           const portAId = mapPort(srcMeta.type, portKey);
           const portBId = mapPort(targetMeta.type, targetPortKey);
 
-          // Bestimme, ob A Output und B Input ist, oder umgekehrt (Stromfluss von Output -> Input)
           let fromComp = srcMeta.internalId;
           let fromPort = portAId;
           let toComp = targetMeta.internalId;
@@ -132,7 +192,6 @@ export function parseExternalProjectJson(rawText: string): SerializedCircuit | n
           const bIsOut = isOutputPort(targetMeta.type, portBId);
 
           if (bIsOut && !aIsOut) {
-            // Target ist Output, Source ist Input -> Richtung umdrehen
             fromComp = targetMeta.internalId;
             fromPort = portBId;
             toComp = srcMeta.internalId;

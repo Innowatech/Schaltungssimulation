@@ -1,8 +1,12 @@
 # Changelog — Mechatronik & Fluidik Baukasten
 
-Alle Änderungen an diesem Projekt werden fortlaufend mit den Versionsnummern `1.0`, `1.1`, `1.2`, `1.3`, `1.4`, `1.5`, `1.6`, `1.7`, `1.8`, `1.9`, `1.10`, `1.11`, `1.12`, `1.13`, `1.14` usw. dokumentiert.
+Alle Änderungen an diesem Projekt werden fortlaufend mit den Versionsnummern `1.0`, `1.1`, `1.2`, `1.3`, `1.4`, `1.5`, `1.6`, `1.7`, `1.8`, `1.9`, `1.10`, `1.11`, `1.12`, `1.13`, `1.14`, `1.15` usw. dokumentiert.
 
-## [1.14] — Aktuelle Version
+## [1.15] — Aktuelle Version
+### Hinzugefügt & Verbessert
+- **Automatischer 24V-Potentialverteiler (Klemmblock X1) beim JSON-Import**: Beim Laden von externen Projekt-Dateien (wie `katholyte.json`) wird nun vollautomatisch ein zentraler 24V-Potentialverteiler (`terminal_block`) zwischen das Netzteil und alle Verbraucher geschaltet. Alle 24V-Versorgungsleitungen (wie `A1` und `15` der Zeitrelais) werden sauber über die Klemmen `out_1`, `out_2` usw. des Klemmblocks verteilt, exakt wie im professionellen Schaltschrankbau.
+
+## [1.14]
 ### Hinzugefügt & Verbessert
 - **Leitungs-Normalisierung für externe JSON-Projekte (wie `katholyte.json`)**: Verbindungen aus externen Schaltplänen werden nun automatisch korrekt von Ausgang/Spannungsquelle zu Eingang geroutet. Dadurch leuchten alle Leitungen beim Einschalten des Netzteils sofort rot auf und der Stromfluss sowie die Zeitrelais-Schaltung funktionieren einwandfrei.
 
