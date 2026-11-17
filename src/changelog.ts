@@ -5,9 +5,17 @@ export interface ChangelogEntry {
   changes: string[];
 }
 
-export const CURRENT_VERSION = '1.11';
+export const CURRENT_VERSION = '1.12';
 
 export const CHANGELOG_ENTRIES: ChangelogEntry[] = [
+  {
+    version: '1.12',
+    title: 'Dynamische Verdrahtungs-Hilfe für TELE E1ZM10 Zeitrelais',
+    date: '2026-11-17',
+    changes: [
+      'Dynamischer Anschluss-Leitfaden im Eigenschaften-Panel: Sobald das Zeitrelais ausgewählt wird, zeigt eine Live-Box direkt unter der Funktionsauswahl an, ob Klemme B1 (Steuerkontakt) benötigt wird oder frei bleiben muss sowie wie A1 und 15/16/18 zu beschalten sind.',
+    ],
+  },
   {
     version: '1.11',
     title: 'Hindernis-Umfahrung aller Leitungen & automatischer Bauteil-Abstand',

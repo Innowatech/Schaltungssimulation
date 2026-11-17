@@ -576,6 +576,35 @@ export const InspectorPanel: React.FC<InspectorPanelProps> = ({
                 <p className="text-[10.5px] text-slate-400 mt-1.5 leading-snug bg-[#141E2E] border border-[#223044] rounded p-2">
                   {TELE_FUNCTIONS.find((f) => f.code === selectedComponent.getTeleFunction())?.description}
                 </p>
+
+                {(() => {
+                  const currentFn = TELE_FUNCTIONS.find(
+                    (f) => f.code === selectedComponent.getTeleFunction()
+                  );
+                  return (
+                    <div className="mt-2 bg-[#121D2E] border border-sky-500/30 rounded p-2.5 space-y-1.5 text-[10.5px]">
+                      <div className="font-semibold text-sky-300">
+                        Anschluss-Empfehlung für {currentFn?.code}:
+                      </div>
+                      <ul className="space-y-1 text-slate-300">
+                        <li>
+                          • <strong className="text-slate-100 font-mono">A1 (+):</strong> Dauerhaft an 24V DC (Betriebsspannung).
+                        </li>
+                        <li>
+                          • <strong className="text-slate-100 font-mono">B1 (S):</strong>{' '}
+                          {currentFn?.usesB1 ? (
+                            <span className="text-amber-300 font-medium">Wird benötigt! Über Schalter/Taster an 24V anschließen.</span>
+                          ) : (
+                            <span className="text-slate-400">Wird <strong className="text-slate-200">nicht</strong> benötigt (offen lassen).</span>
+                          )}
+                        </li>
+                        <li>
+                          • <strong className="text-slate-100 font-mono">15 / 16 / 18:</strong> Wechsler (15 = COM Eingang, 18 = Schließer NO).
+                        </li>
+                      </ul>
+                    </div>
+                  );
+                })()}
               </div>
 
               <div>

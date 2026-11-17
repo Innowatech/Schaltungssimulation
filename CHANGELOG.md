@@ -1,8 +1,12 @@
 # Changelog — Mechatronik & Fluidik Baukasten
 
-Alle Änderungen an diesem Projekt werden fortlaufend mit den Versionsnummern `1.0`, `1.1`, `1.2`, `1.3`, `1.4`, `1.5`, `1.6`, `1.7`, `1.8`, `1.9`, `1.10`, `1.11` usw. dokumentiert.
+Alle Änderungen an diesem Projekt werden fortlaufend mit den Versionsnummern `1.0`, `1.1`, `1.2`, `1.3`, `1.4`, `1.5`, `1.6`, `1.7`, `1.8`, `1.9`, `1.10`, `1.11`, `1.12` usw. dokumentiert.
 
-## [1.11] — Aktuelle Version
+## [1.12] — Aktuelle Version
+### Hinzugefügt
+- **Dynamische Verdrahtungs-Hilfe im Eigenschaften-Panel**: Sobald das Zeitrelais ausgewählt wird, zeigt eine übersichtliche Live-Box direkt unter der Funktionsauswahl an, wie die Klemmen (`A1`, `B1`, `15/16/18`) für die gerade aktive Funktion (`E`, `R`, `Ws`, etc.) verdrahtet werden müssen (z. B. ob `B1` angeschlossen sein muss oder offen bleiben darf).
+
+## [1.11]
 ### Verbessert
 - **Hindernis-Umfahrung für alle Leitungen (Hanan-Grid A\*)**: Sämtliche Elektro-, Analog- und Fluidleitungen umfahren alle Bauteile konsequent außen herum — keine Leitung läuft mehr versteckt unter einem Bauteil oder Igel hindurch, inklusive Live-Neuverlegung beim Verschieben.
 - **Automatischer Mindestabstand beim Platzieren/Verschieben**: Liegt ein Bauteil beim Ablegen oder Verschieben näher als `36 px` an einem Nachbarbauteil, verschiebt es sich automatisch ein Stück auf den nächstgelegenen freien Platz, damit immer genug Leitungs- und Klemmenraum bleibt.
