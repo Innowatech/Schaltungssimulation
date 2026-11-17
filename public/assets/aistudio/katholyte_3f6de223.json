@@ -1,0 +1,76 @@
+{
+  "project": "Zwei-Tank-Wechselschaltung mit Tele E1ZM10",
+  "components": [
+    {
+      "id": "power_supply",
+      "type": "VoltageSource",
+      "voltage": "230V_AC"
+    },
+    {
+      "id": "valve_3_2",
+      "type": "SolenoidValve3_2",
+      "description": "Zulauf-Umschaltventil (Links / Rechts)"
+    },
+    {
+      "id": "valve_drain_left",
+      "type": "SolenoidValve2_2",
+      "description": "Ablassventil Tank Links"
+    },
+    {
+      "id": "valve_drain_right",
+      "type": "SolenoidValve2_2",
+      "description": "Ablassventil Tank Rechts"
+    },
+    {
+      "id": "tank_left",
+      "type": "Tank",
+      "capacity_liters": 160
+    },
+    {
+      "id": "tank_right",
+      "type": "Tank",
+      "capacity_liters": 160
+    },
+    {
+      "id": "K1",
+      "type": "Tele_E1ZM10",
+      "mode": "Ip",
+      "time_t1": "24h",
+      "time_t2": "24h",
+      "connections": {
+        "A1": "power_supply.L",
+        "A2": "power_supply.N",
+        "B1": null,
+        "15": "power_supply.L",
+        "18": "valve_3_2.coil",
+        "16": "K3.B1"
+      }
+    },
+    {
+      "id": "K2",
+      "type": "Tele_E1ZM10",
+      "mode": "E",
+      "time_t1": "23h",
+      "connections": {
+        "A1": "power_supply.L",
+        "A2": "power_supply.N",
+        "B1": "K1.18",
+        "15": "power_supply.L",
+        "18": "valve_drain_left.coil"
+      }
+    },
+    {
+      "id": "K3",
+      "type": "Tele_E1ZM10",
+      "mode": "E",
+      "time_t1": "23h",
+      "connections": {
+        "A1": "power_supply.L",
+        "A2": "power_supply.N",
+        "B1": "K1.16",
+        "15": "power_supply.L",
+        "18": "valve_drain_right.coil"
+      }
+    }
+  ]
+}

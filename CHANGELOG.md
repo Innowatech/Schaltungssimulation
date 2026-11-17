@@ -1,8 +1,12 @@
 # Changelog — Mechatronik & Fluidik Baukasten
 
-Alle Änderungen an diesem Projekt werden fortlaufend mit den Versionsnummern `1.0`, `1.1`, `1.2`, `1.3`, `1.4`, `1.5`, `1.6`, `1.7`, `1.8`, `1.9`, `1.10`, `1.11`, `1.12` usw. dokumentiert.
+Alle Änderungen an diesem Projekt werden fortlaufend mit den Versionsnummern `1.0`, `1.1`, `1.2`, `1.3`, `1.4`, `1.5`, `1.6`, `1.7`, `1.8`, `1.9`, `1.10`, `1.11`, `1.12`, `1.13` usw. dokumentiert.
 
-## [1.12] — Aktuelle Version
+## [1.13] — Aktuelle Version
+### Hinzugefügt
+- **Intelligenter JSON-Projekt-Adapter (z. B. für deine `katholyte.json`)**: Die App liest nun nicht mehr nur eigene Export-Dateien ein, sondern verfügt über einen automatischen Übersetzer für externe Projekt-Dateien (mit benutzerdefinierten Typen wie `VoltageSource`, `Tele_E1ZM10`, `SolenoidValve3_2`, `Tank` und verschachtelten `connections`-Objekten). Die hochgeladene Datei wird fehlerfrei erkannt und die Schaltung automatisch auf der Arbeitsfläche aufgebaut!
+
+## [1.12]
 ### Hinzugefügt
 - **Dynamische Verdrahtungs-Hilfe im Eigenschaften-Panel**: Sobald das Zeitrelais ausgewählt wird, zeigt eine übersichtliche Live-Box direkt unter der Funktionsauswahl an, wie die Klemmen (`A1`, `B1`, `15/16/18`) für die gerade aktive Funktion (`E`, `R`, `Ws`, etc.) verdrahtet werden müssen (z. B. ob `B1` angeschlossen sein muss oder offen bleiben darf).
 

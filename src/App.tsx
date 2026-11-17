@@ -17,6 +17,7 @@ import {
 } from './engine/presets';
 import { SavedSimulationEntry, SerializedCircuit } from './engine/types';
 import { resolveComponentPlacement } from './utils/orthogonalRouting';
+import { parseExternalProjectJson } from './utils/externalProjectAdapter';
 
 export default function App() {
   const engineRef = useRef<SimulationEngine | null>(null);
@@ -444,10 +445,15 @@ export default function App() {
   const handleImportJson = useCallback(
     (jsonText: string) => {
       try {
-        const parsed = JSON.parse(jsonText) as SerializedCircuit;
-        if (!Array.isArray(parsed.components) || !Array.isArray(parsed.connections)) {
-          throw new Error('Ungültiges Format');
+        let parsed = parseExternalProjectJson(jsonText);
+        if (!parsed) {
+          const direct = JSON.parse(jsonText) as SerializedCircuit;
+          if (!Array.isArray(direct.components) || !Array.isArray(direct.connections)) {
+            throw new Error('Ungültiges Format');
+          }
+          parsed = direct;
         }
+
         engineRef.current?.loadCircuit(parsed);
         setSelectedComponentId(null);
         setSelectedConnectionId(null);
@@ -455,7 +461,7 @@ export default function App() {
         setActiveCircuitId('custom');
         forceRefresh();
         showNotice(
-          `Schaltplan geladen (${parsed.components.length} Bauteile, ${parsed.connections.length} Verbindungen).`
+          `Schaltplan "${parsed.name || 'Projekt'}" geladen (${parsed.components.length} Bauteile, ${parsed.connections.length} Verbindungen).`
         );
       } catch {
         showNotice('Fehler: Ungültige Schaltplan-JSON-Datei.');

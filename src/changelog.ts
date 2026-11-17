@@ -5,9 +5,17 @@ export interface ChangelogEntry {
   changes: string[];
 }
 
-export const CURRENT_VERSION = '1.12';
+export const CURRENT_VERSION = '1.13';
 
 export const CHANGELOG_ENTRIES: ChangelogEntry[] = [
+  {
+    version: '1.13',
+    title: 'Intelligenter JSON-Projekt-Adapter (z. B. für katholyte.json)',
+    date: '2026-11-17',
+    changes: [
+      'Intelligenter JSON-Import-Adapter: Die App erkennt nun automatisch externe Projekt-JSON-Dateien (mit benutzerdefinierten Strukturen wie VoltageSource, Tele_E1ZM10, SolenoidValve und verschachtelten connections), konvertiert sie fehlerfrei und baut die Schaltung automatisch auf.',
+    ],
+  },
   {
     version: '1.12',
     title: 'Dynamische Verdrahtungs-Hilfe für TELE E1ZM10 Zeitrelais',
