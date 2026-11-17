@@ -50,7 +50,11 @@ interface ComponentNodeProps {
   onStartDrag: (e: React.PointerEvent, componentId: string) => void;
   onSelect: (componentId: string) => void;
   onOpenProperties: (componentId: string) => void;
-  onPortClick: (e: React.MouseEvent, componentId: string, port: PortDefinition) => void;
+  onPortPointerDown: (
+    e: React.PointerEvent,
+    componentId: string,
+    port: PortDefinition
+  ) => void;
   onMutateComponent: () => void;
 }
 
@@ -81,7 +85,7 @@ export const ComponentNode: React.FC<ComponentNodeProps> = ({
   onStartDrag,
   onSelect,
   onOpenProperties,
-  onPortClick,
+  onPortPointerDown,
   onMutateComponent,
 }) => {
   const ports = component.getPorts();
@@ -1092,6 +1096,7 @@ export const ComponentNode: React.FC<ComponentNodeProps> = ({
         e.stopPropagation();
       }}
       onPointerDown={(e) => {
+        e.stopPropagation();
         onSelect(component.id);
         onStartDrag(e, component.id);
       }}
@@ -1169,35 +1174,41 @@ export const ComponentNode: React.FC<ComponentNodeProps> = ({
           >
             <button
               type="button"
+              data-component-id={component.id}
+              data-port-id={port.id}
               title={`${port.label} — ${port.description ?? ''}`}
-              onPointerDown={(e) => e.stopPropagation()}
-              onClick={(e) => {
+              onPointerDown={(e) => {
                 e.stopPropagation();
-                onPortClick(e, component.id, port);
+                onPortPointerDown(e, component.id, port);
               }}
-              className={`w-4 h-4 rounded-full border-2 flex items-center justify-center transition-transform cursor-crosshair ${
-                isPendingOrigin
-                  ? 'scale-125 border-amber-300 bg-amber-400 shadow-[0_0_8px_rgba(251,191,36,0.9)]'
-                  : isCompatible
-                  ? 'scale-125 border-emerald-300 bg-emerald-500/80 shadow-[0_0_8px_rgba(52,211,153,0.9)] animate-pulse'
-                  : port.domain === 'electrical'
-                  ? isElecActive
-                    ? 'border-red-300 bg-red-500 shadow-[0_0_8px_rgba(239,68,68,0.85)]'
-                    : 'border-slate-400 bg-[#0B111A] hover:border-red-400 hover:scale-110'
-                  : port.domain === 'analog'
-                  ? isAnalogActive
-                    ? 'border-emerald-200 bg-emerald-500 shadow-[0_0_8px_rgba(16,185,129,0.85)]'
-                    : 'border-emerald-500/70 bg-[#0B111A] hover:border-emerald-300 hover:scale-110'
-                  : isKatFluidPort
-                  ? isFluidActive
-                    ? 'border-emerald-200 bg-emerald-500 shadow-[0_0_8px_rgba(16,185,129,0.85)]'
-                    : 'border-emerald-500/70 bg-[#0B111A] hover:border-emerald-300 hover:scale-110'
-                  : isFluidActive
-                  ? 'border-sky-200 bg-sky-500 shadow-[0_0_8px_rgba(14,165,233,0.85)]'
-                  : 'border-sky-500/70 bg-[#0B111A] hover:border-sky-300 hover:scale-110'
-              }`}
+              onClick={(e) => e.stopPropagation()}
+              className="w-6 h-6 -m-1 rounded-full flex items-center justify-center cursor-crosshair bg-transparent"
             >
-              <span className="w-1.5 h-1.5 rounded-full bg-white/80 pointer-events-none" />
+              <span
+                className={`w-4 h-4 rounded-full border-2 flex items-center justify-center transition-transform pointer-events-none ${
+                  isPendingOrigin
+                    ? 'scale-125 border-amber-300 bg-amber-400 shadow-[0_0_8px_rgba(251,191,36,0.9)]'
+                    : isCompatible
+                    ? 'scale-125 border-emerald-300 bg-emerald-500/80 shadow-[0_0_8px_rgba(52,211,153,0.9)] animate-pulse'
+                    : port.domain === 'electrical'
+                    ? isElecActive
+                      ? 'border-red-300 bg-red-500 shadow-[0_0_8px_rgba(239,68,68,0.85)]'
+                      : 'border-slate-400 bg-[#0B111A] group-hover:border-red-400 group-hover:scale-110'
+                    : port.domain === 'analog'
+                    ? isAnalogActive
+                      ? 'border-emerald-200 bg-emerald-500 shadow-[0_0_8px_rgba(16,185,129,0.85)]'
+                      : 'border-emerald-500/70 bg-[#0B111A] group-hover:border-emerald-300 group-hover:scale-110'
+                    : isKatFluidPort
+                    ? isFluidActive
+                      ? 'border-emerald-200 bg-emerald-500 shadow-[0_0_8px_rgba(16,185,129,0.85)]'
+                      : 'border-emerald-500/70 bg-[#0B111A] group-hover:border-emerald-300 group-hover:scale-110'
+                    : isFluidActive
+                    ? 'border-sky-200 bg-sky-500 shadow-[0_0_8px_rgba(14,165,233,0.85)]'
+                    : 'border-sky-500/70 bg-[#0B111A] group-hover:border-sky-300 group-hover:scale-110'
+                }`}
+              >
+                <span className="w-1.5 h-1.5 rounded-full bg-white/80 pointer-events-none" />
+              </span>
             </button>
 
             <span

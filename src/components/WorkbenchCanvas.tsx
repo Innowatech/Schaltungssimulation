@@ -60,6 +60,16 @@ export const WorkbenchCanvas: React.FC<WorkbenchCanvasProps> = ({
   const [hoveredConnId, setHoveredConnId] = useState<string | null>(null);
   const [confirmDisconnectId, setConfirmDisconnectId] = useState<string | null>(null);
 
+  const wireDragRef = useRef<{
+    pointerId: number;
+    sourceComponentId: string;
+    sourcePort: PortDefinition;
+    startClientX: number;
+    startClientY: number;
+    wasAlreadyPendingOrigin: boolean;
+    hadDragged: boolean;
+  } | null>(null);
+
   const dragStateRef = useRef<
     | {
         kind: 'pan';
@@ -82,6 +92,25 @@ export const WorkbenchCanvas: React.FC<WorkbenchCanvasProps> = ({
     | null
   >(null);
 
+  const latestPropsRef = useRef({
+    pan,
+    zoom,
+    components,
+    pendingWire,
+    onPanZoomChange,
+    onMoveComponent,
+    onCreateConnection,
+  });
+  latestPropsRef.current = {
+    pan,
+    zoom,
+    components,
+    pendingWire,
+    onPanZoomChange,
+    onMoveComponent,
+    onCreateConnection,
+  };
+
   useEffect(() => {
     setConfirmDisconnectId(null);
   }, [selectedConnectionId]);
@@ -89,9 +118,10 @@ export const WorkbenchCanvas: React.FC<WorkbenchCanvasProps> = ({
   const screenToWorld = (clientX: number, clientY: number) => {
     const rect = containerRef.current?.getBoundingClientRect();
     if (!rect) return { x: 0, y: 0 };
+    const { pan: curPan, zoom: curZoom } = latestPropsRef.current;
     return {
-      x: (clientX - rect.left - pan.x) / zoom,
-      y: (clientY - rect.top - pan.y) / zoom,
+      x: (clientX - rect.left - curPan.x) / curZoom,
+      y: (clientY - rect.top - curPan.y) / curZoom,
     };
   };
 
@@ -106,6 +136,7 @@ export const WorkbenchCanvas: React.FC<WorkbenchCanvasProps> = ({
 
       if (e.key === 'Escape') {
         setPendingWire(null);
+        wireDragRef.current = null;
         setConfirmDisconnectId(null);
       } else if ((e.key === 'Delete' || e.key === 'Backspace') && !isEditingInput) {
         onDeleteSelected();
@@ -115,20 +146,112 @@ export const WorkbenchCanvas: React.FC<WorkbenchCanvasProps> = ({
     return () => window.removeEventListener('keydown', onKeyDown);
   }, [onDeleteSelected]);
 
+  useEffect(() => {
+    const handleWindowPointerMove = (e: PointerEvent) => {
+      const {
+        zoom: curZoom,
+        pendingWire: curPending,
+        onPanZoomChange: updatePanZoom,
+        onMoveComponent: moveComp,
+      } = latestPropsRef.current;
+
+      if (curPending || wireDragRef.current) {
+        setCursorWorld(screenToWorld(e.clientX, e.clientY));
+      }
+
+      const wDrag = wireDragRef.current;
+      if (wDrag && wDrag.pointerId === e.pointerId) {
+        const dist = Math.hypot(e.clientX - wDrag.startClientX, e.clientY - wDrag.startClientY);
+        if (dist >= DRAG_THRESHOLD_PX) {
+          wDrag.hadDragged = true;
+        }
+      }
+
+      const drag = dragStateRef.current;
+      if (!drag || drag.pointerId !== e.pointerId) return;
+
+      if (drag.kind === 'pan') {
+        const dx = e.clientX - drag.startClientX;
+        const dy = e.clientY - drag.startClientY;
+        updatePanZoom({ x: drag.startPanX + dx, y: drag.startPanY + dy }, curZoom);
+      } else if (drag.kind === 'comp') {
+        const distPx = Math.hypot(e.clientX - drag.startClientX, e.clientY - drag.startClientY);
+        if (!drag.hasExceededThreshold) {
+          if (distPx < DRAG_THRESHOLD_PX) return;
+          drag.hasExceededThreshold = true;
+        }
+        const dx = (e.clientX - drag.startClientX) / curZoom;
+        const dy = (e.clientY - drag.startClientY) / curZoom;
+        const nextX = Math.round((drag.startCompX + dx) / 4) * 4;
+        const nextY = Math.round((drag.startCompY + dy) / 4) * 4;
+        moveComp(drag.compId, nextX, nextY);
+      }
+    };
+
+    const handleWindowPointerUp = (e: PointerEvent) => {
+      if (dragStateRef.current && dragStateRef.current.pointerId === e.pointerId) {
+        dragStateRef.current = null;
+      }
+
+      const wDrag = wireDragRef.current;
+      if (wDrag && wDrag.pointerId === e.pointerId) {
+        wireDragRef.current = null;
+
+        if (wDrag.hadDragged) {
+          // Drag-&-Drop-Verbindung direkt auf Zielklemme prüfen
+          const hitEl = document.elementFromPoint(e.clientX, e.clientY);
+          const portEl = hitEl?.closest?.('[data-port-id][data-component-id]') as HTMLElement | null;
+          if (portEl) {
+            const targetCompId = portEl.dataset.componentId;
+            const targetPortId = portEl.dataset.portId;
+            if (targetCompId && targetPortId) {
+              const targetComp = latestPropsRef.current.components.find(
+                (c) => c.id === targetCompId
+              );
+              const targetPort = targetComp?.getPorts().find((p) => p.id === targetPortId);
+              if (
+                targetPort &&
+                targetCompId !== wDrag.sourceComponentId &&
+                targetPort.domain === wDrag.sourcePort.domain &&
+                targetPort.direction !== wDrag.sourcePort.direction
+              ) {
+                latestPropsRef.current.onCreateConnection(
+                  wDrag.sourceComponentId,
+                  wDrag.sourcePort.id,
+                  targetCompId,
+                  targetPort.id
+                );
+              }
+            }
+          }
+          setPendingWire(null);
+        } else if (wDrag.wasAlreadyPendingOrigin) {
+          // Zweiter Klick auf die bereits gewählte Startklemme bricht ab
+          setPendingWire(null);
+        }
+      }
+    };
+
+    window.addEventListener('pointermove', handleWindowPointerMove);
+    window.addEventListener('pointerup', handleWindowPointerUp);
+    window.addEventListener('pointercancel', handleWindowPointerUp);
+    return () => {
+      window.removeEventListener('pointermove', handleWindowPointerMove);
+      window.removeEventListener('pointerup', handleWindowPointerUp);
+      window.removeEventListener('pointercancel', handleWindowPointerUp);
+    };
+  }, []);
+
   const handleCanvasPointerDown = (e: React.PointerEvent) => {
-    if (e.button !== 0 && e.button !== 1) return;
+    if (e.button !== 0 && e.button !== 1 && e.button !== -1) return;
     if (pendingWire) {
       setPendingWire(null);
+      wireDragRef.current = null;
       return;
     }
     onSelectComponent(null);
     onSelectConnection(null);
     setConfirmDisconnectId(null);
-    try {
-      containerRef.current?.setPointerCapture(e.pointerId);
-    } catch {
-      // ignore if capture fails
-    }
     dragStateRef.current = {
       kind: 'pan',
       pointerId: e.pointerId,
@@ -140,14 +263,9 @@ export const WorkbenchCanvas: React.FC<WorkbenchCanvasProps> = ({
   };
 
   const handleStartDragComponent = (e: React.PointerEvent, componentId: string) => {
-    if (e.button !== 0) return;
+    if (e.button !== 0 && e.button !== -1) return;
     const comp = components.find((c) => c.id === componentId);
     if (!comp) return;
-    try {
-      containerRef.current?.setPointerCapture(e.pointerId);
-    } catch {
-      // ignore if capture fails
-    }
     dragStateRef.current = {
       kind: 'comp',
       pointerId: e.pointerId,
@@ -158,45 +276,6 @@ export const WorkbenchCanvas: React.FC<WorkbenchCanvasProps> = ({
       startCompY: comp.y,
       hasExceededThreshold: false,
     };
-  };
-
-  const handlePointerMove = (e: React.PointerEvent) => {
-    if (pendingWire) {
-      setCursorWorld(screenToWorld(e.clientX, e.clientY));
-    }
-
-    const drag = dragStateRef.current;
-    if (!drag) return;
-
-    if (drag.kind === 'pan') {
-      const dx = e.clientX - drag.startClientX;
-      const dy = e.clientY - drag.startClientY;
-      onPanZoomChange({ x: drag.startPanX + dx, y: drag.startPanY + dy }, zoom);
-    } else if (drag.kind === 'comp') {
-      const distPx = Math.hypot(e.clientX - drag.startClientX, e.clientY - drag.startClientY);
-      if (!drag.hasExceededThreshold) {
-        if (distPx < DRAG_THRESHOLD_PX) return;
-        drag.hasExceededThreshold = true;
-      }
-      const dx = (e.clientX - drag.startClientX) / zoom;
-      const dy = (e.clientY - drag.startClientY) / zoom;
-      const nextX = Math.round((drag.startCompX + dx) / 4) * 4;
-      const nextY = Math.round((drag.startCompY + dy) / 4) * 4;
-      onMoveComponent(drag.compId, nextX, nextY);
-    }
-  };
-
-  const handlePointerUp = (e: React.PointerEvent) => {
-    if (dragStateRef.current) {
-      try {
-        if (containerRef.current?.hasPointerCapture(e.pointerId)) {
-          containerRef.current.releasePointerCapture(e.pointerId);
-        }
-      } catch {
-        // ignore
-      }
-      dragStateRef.current = null;
-    }
   };
 
   const handleWheel = (e: React.WheelEvent) => {
@@ -225,30 +304,18 @@ export const WorkbenchCanvas: React.FC<WorkbenchCanvasProps> = ({
     onDropNewComponent(type, Math.round(world.x - 90), Math.round(world.y - 50));
   };
 
-  const handlePortClick = (
-    e: React.MouseEvent,
+  const handlePortPointerDown = (
+    e: React.PointerEvent,
     componentId: string,
     port: PortDefinition
   ) => {
+    if (e.button !== 0 && e.button !== -1) return;
     const world = screenToWorld(e.clientX, e.clientY);
     setCursorWorld(world);
 
-    if (!pendingWire) {
-      setPendingWire({
-        componentId,
-        portId: port.id,
-        domain: port.domain,
-        direction: port.direction,
-      });
-      return;
-    }
-
-    if (pendingWire.componentId === componentId && pendingWire.portId === port.id) {
-      setPendingWire(null);
-      return;
-    }
-
+    // Fall A: Es läuft bereits eine Verdrahtung -> kompatible Zielklemme direkt verbinden
     if (
+      pendingWire &&
       pendingWire.componentId !== componentId &&
       pendingWire.domain === port.domain &&
       pendingWire.direction !== port.direction
@@ -260,14 +327,30 @@ export const WorkbenchCanvas: React.FC<WorkbenchCanvasProps> = ({
         port.id
       );
       setPendingWire(null);
-    } else {
-      setPendingWire({
-        componentId,
-        portId: port.id,
-        domain: port.domain,
-        direction: port.direction,
-      });
+      wireDragRef.current = null;
+      return;
     }
+
+    // Fall B: Gleiche Startklemme nochmal gedrückt -> bei kurzem Loslassen abbrechen, bei Ziehen neu starten
+    const isSameOrigin =
+      pendingWire?.componentId === componentId && pendingWire?.portId === port.id;
+
+    setPendingWire({
+      componentId,
+      portId: port.id,
+      domain: port.domain,
+      direction: port.direction,
+    });
+
+    wireDragRef.current = {
+      pointerId: e.pointerId,
+      sourceComponentId: componentId,
+      sourcePort: port,
+      startClientX: e.clientX,
+      startClientY: e.clientY,
+      wasAlreadyPendingOrigin: isSameOrigin,
+      hadDragged: false,
+    };
   };
 
   const compMap = useMemo(
@@ -333,9 +416,6 @@ export const WorkbenchCanvas: React.FC<WorkbenchCanvasProps> = ({
       ref={containerRef}
       onContextMenu={(e) => e.preventDefault()}
       onPointerDown={handleCanvasPointerDown}
-      onPointerMove={handlePointerMove}
-      onPointerUp={handlePointerUp}
-      onPointerCancel={handlePointerUp}
       onWheel={handleWheel}
       onDragOver={(e) => {
         e.preventDefault();
@@ -751,7 +831,7 @@ export const WorkbenchCanvas: React.FC<WorkbenchCanvasProps> = ({
           )}
         </svg>
 
-        <div className="pointer-events-auto">
+        <div className="relative z-10 pointer-events-auto">
           {components.map((comp) => (
             <ComponentNode
               key={comp.id}
@@ -768,7 +848,7 @@ export const WorkbenchCanvas: React.FC<WorkbenchCanvasProps> = ({
                 onSelectConnection(null);
                 onOpenProperties(id);
               }}
-              onPortClick={handlePortClick}
+              onPortPointerDown={handlePortPointerDown}
               onMutateComponent={onMutateComponent}
             />
           ))}

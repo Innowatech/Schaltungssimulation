@@ -5,9 +5,18 @@ export interface ChangelogEntry {
   changes: string[];
 }
 
-export const CURRENT_VERSION = '1.8';
+export const CURRENT_VERSION = '1.9';
 
 export const CHANGELOG_ENTRIES: ChangelogEntry[] = [
+  {
+    version: '1.9',
+    title: 'Bugfix: Einzelnes Bauteil-Verschieben & Klemmen-Verdrahtung',
+    date: '2026-11-17',
+    changes: [
+      'Behoben: Fehlendes stopPropagation beim Ziehen von Bauteilen (zuvor wurde stattdessen die gesamte Arbeitsfläche verschoben).',
+      'Klemmen-Verdrahtung überarbeitet: Leitungen lassen sich jetzt sowohl per Klick-auf-Klemme → Klick-auf-Zielklemme als auch per Ziehen von Klemme zu Klemme verbinden (inkl. vergrößerter 24-px-Trefferfläche und zuverlässiger Maus-/Touch-Verfolgung).',
+    ],
+  },
   {
     version: '1.8',
     title: 'Großes Fluidik-, TELE-Zeitrelais- & Ergonomie-Update',

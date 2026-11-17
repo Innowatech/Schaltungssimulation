@@ -1,8 +1,13 @@
 # Changelog — Mechatronik & Fluidik Baukasten
 
-Alle Änderungen an diesem Projekt werden fortlaufend mit den Versionsnummern `1.0`, `1.1`, `1.2`, `1.3`, `1.4`, `1.5`, `1.6`, `1.7`, `1.8` usw. dokumentiert.
+Alle Änderungen an diesem Projekt werden fortlaufend mit den Versionsnummern `1.0`, `1.1`, `1.2`, `1.3`, `1.4`, `1.5`, `1.6`, `1.7`, `1.8`, `1.9` usw. dokumentiert.
 
-## [1.8] — Aktuelle Version
+## [1.9] — Aktuelle Version
+### Behoben
+- **Bauteile einzeln verschieben**: `e.stopPropagation()` im `onPointerDown`-Handler von `ComponentNode` ergänzt und globales Fenster-Tracking für flüssiges Verschieben einzelner Bausteine ohne Mitbewegen des Hintergrunds umgesetzt.
+- **Kabel & Leitungen zuverlässig anschließen**: Verdrahtung unterstützt nun sowohl Klick-Klick als auch direktes Ziehen von Klemme zu Klemme mit vergrößerten 24-px-Klemmen-Trefferflächen und korrekter `z-index`-Schichtung über den Leitungsbahnen.
+
+## [1.8]
 ### Hinzugefügt & Verbessert
 - **TELE ENYA E1ZM10 Multifunktions-Zeitrelais (nach Datenblatt)**: Originalgetreue Klemmen (`A1`, `B1` Steuerkontakt, Wechsler `15–16–18`), alle 7 Funktionen (`E` Einschaltverzögert, `R` Rückfallverzögert, `Ws` Einschaltwischend, `Wa` Ausschaltwischend, `Es` Einschaltverzögert mit Steuerkontakt, `Wu` Einschaltwischend spannungsgesteuert, `Bp` Blinker pausenbeginnend), alle 7 Zeitbereiche (`1s` [50ms–1s] bis `100h` [5h–100h]), 5–100%-Skala sowie `U/t`- und `R`-LED-Statusanzeige.
 - **Ergonomie & Bedienung**:
