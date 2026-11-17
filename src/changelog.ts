@@ -5,15 +5,34 @@ export interface ChangelogEntry {
   changes: string[];
 }
 
-export const CURRENT_VERSION = '1.9';
+export const CURRENT_VERSION = '1.11';
 
 export const CHANGELOG_ENTRIES: ChangelogEntry[] = [
+  {
+    version: '1.11',
+    title: 'Hindernis-Umfahrung aller Leitungen & automatischer Bauteil-Abstand',
+    date: '2026-11-17',
+    changes: [
+      'A*-Leitungsrouter mit Hindernis-Umfahrung: Elektro-, Analog- und Fluidleitungen werden ab sofort garantiert außen um alle Bauteile herumgeführt und laufen nicht mehr unter Bauteilen hindurch (Live-Neuverlegung beim Verschieben).',
+      'Automatischer Mindestabstand (36 px): Wird ein Bauteil zu nah an ein anderes gesetzt oder geschoben, rückt es beim Loslassen automatisch ein Stück beiseite, damit alle Anschlüsse und Leitungsbahnen freien Raum haben.',
+    ],
+  },
+  {
+    version: '1.10',
+    title: 'Elektrisches Brücken (z. B. A1 → 15) & klare Klemmen-Beschriftung',
+    date: '2026-11-17',
+    changes: [
+      'Elektrisches Brücken / Durchschleifen: Klemmen lassen sich jetzt direkt am selben Bauteil (z. B. Brücke A1 → 15 am Zeitrelais oder 18 → B1) sowie über Eingänge benachbarter Bauteile (z. B. K1.A1 → K2.A1) ohne extra Igel-Leitung verdrahten.',
+      'Klemmen-Übersicht im Eigenschaften-Panel erweitert: Jede Klemme zeigt nun direkt ihre vollständige Funktionsbeschreibung (z. B. 15 = Wechsler COM, 16 = Öffner NC, 18 = Schließer NO, B1 = Steuerkontakt) sowie einen deutlich beschrifteten „Trennen“-Button mit Ja/Nein-Bestätigung pro Einzelleitung.',
+    ],
+  },
   {
     version: '1.9',
     title: 'Bugfix: Einzelnes Bauteil-Verschieben & Klemmen-Verdrahtung',
     date: '2026-11-17',
     changes: [
       'Behoben: Fehlendes stopPropagation beim Ziehen von Bauteilen (zuvor wurde stattdessen die gesamte Arbeitsfläche verschoben).',
+      'Behoben: Neu verbundene Leitungen wurden wegen In-Place-Array-Mutation im SimulationEngine nicht neu gerendert; zudem SVG-Glow-Filter bei exakt waagerechten/senkrechten 90°-Leitungen korrigiert.',
       'Klemmen-Verdrahtung überarbeitet: Leitungen lassen sich jetzt sowohl per Klick-auf-Klemme → Klick-auf-Zielklemme als auch per Ziehen von Klemme zu Klemme verbinden (inkl. vergrößerter 24-px-Trefferfläche und zuverlässiger Maus-/Touch-Verfolgung).',
     ],
   },

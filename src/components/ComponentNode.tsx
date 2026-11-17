@@ -64,9 +64,12 @@ function isPortCompatible(
   port: PortDefinition
 ): boolean {
   if (!pending) return false;
-  if (pending.componentId === componentId) return false;
+  if (pending.componentId === componentId && pending.portId === port.id) return false;
   if (pending.domain !== port.domain) return false;
-  return pending.direction !== port.direction;
+  if (port.domain === 'electrical') {
+    return !(pending.direction === 'output' && port.direction === 'output');
+  }
+  return pending.componentId !== componentId && pending.direction !== port.direction;
 }
 
 function getFaultBadgeText(fault: ComponentFaultType): string | null {

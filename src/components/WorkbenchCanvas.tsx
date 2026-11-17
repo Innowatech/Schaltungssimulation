@@ -4,8 +4,10 @@ import { SimComponent } from '../engine/SimComponent';
 import { FloatProbeComponent, TankComponent } from '../engine/components/FluidComponents';
 import { Connection, PortDefinition } from '../engine/types';
 import {
+  ComponentObstacle,
   RouteEndpoint,
   buildPreviewOrthogonalPath,
+  resolveComponentPlacement,
   routeAllOrthogonalWires,
 } from '../utils/orthogonalRouting';
 import { ComponentNode, PendingWireStart } from './ComponentNode';
@@ -189,8 +191,34 @@ export const WorkbenchCanvas: React.FC<WorkbenchCanvasProps> = ({
     };
 
     const handleWindowPointerUp = (e: PointerEvent) => {
-      if (dragStateRef.current && dragStateRef.current.pointerId === e.pointerId) {
+      const drag = dragStateRef.current;
+      if (drag && drag.pointerId === e.pointerId) {
         dragStateRef.current = null;
+        if (drag.kind === 'comp' && drag.hasExceededThreshold) {
+          const allComps = latestPropsRef.current.components;
+          const moved = allComps.find((c) => c.id === drag.compId);
+          if (moved) {
+            const obstacles: ComponentObstacle[] = allComps.map((c) => ({
+              id: c.id,
+              x: c.x,
+              y: c.y,
+              width: c.width,
+              height: c.height,
+            }));
+            const resolved = resolveComponentPlacement(
+              moved.id,
+              moved.x,
+              moved.y,
+              moved.width,
+              moved.height,
+              obstacles,
+              36
+            );
+            if (resolved.x !== moved.x || resolved.y !== moved.y) {
+              latestPropsRef.current.onMoveComponent(moved.id, resolved.x, resolved.y);
+            }
+          }
+        }
       }
 
       const wDrag = wireDragRef.current;
@@ -211,9 +239,12 @@ export const WorkbenchCanvas: React.FC<WorkbenchCanvasProps> = ({
               const targetPort = targetComp?.getPorts().find((p) => p.id === targetPortId);
               if (
                 targetPort &&
-                targetCompId !== wDrag.sourceComponentId &&
+                !(targetCompId === wDrag.sourceComponentId && targetPort.id === wDrag.sourcePort.id) &&
                 targetPort.domain === wDrag.sourcePort.domain &&
-                targetPort.direction !== wDrag.sourcePort.direction
+                (targetPort.domain === 'electrical'
+                  ? !(targetPort.direction === 'output' && wDrag.sourcePort.direction === 'output')
+                  : targetCompId !== wDrag.sourceComponentId &&
+                    targetPort.direction !== wDrag.sourcePort.direction)
               ) {
                 latestPropsRef.current.onCreateConnection(
                   wDrag.sourceComponentId,
@@ -313,13 +344,16 @@ export const WorkbenchCanvas: React.FC<WorkbenchCanvasProps> = ({
     const world = screenToWorld(e.clientX, e.clientY);
     setCursorWorld(world);
 
-    // Fall A: Es läuft bereits eine Verdrahtung -> kompatible Zielklemme direkt verbinden
-    if (
+    // Fall A: Es läuft bereits eine Verdrahtung -> kompatible Zielklemme (inkl. Brücke) direkt verbinden
+    const isCompatiblePending =
       pendingWire &&
-      pendingWire.componentId !== componentId &&
+      !(pendingWire.componentId === componentId && pendingWire.portId === port.id) &&
       pendingWire.domain === port.domain &&
-      pendingWire.direction !== port.direction
-    ) {
+      (port.domain === 'electrical'
+        ? !(pendingWire.direction === 'output' && port.direction === 'output')
+        : pendingWire.componentId !== componentId && pendingWire.direction !== port.direction);
+
+    if (isCompatiblePending && pendingWire) {
       onCreateConnection(
         pendingWire.componentId,
         pendingWire.portId,
@@ -358,7 +392,19 @@ export const WorkbenchCanvas: React.FC<WorkbenchCanvasProps> = ({
     [components]
   );
 
-  // Berechne alle rechtwinkligen Leitungen + Option-C-Kreuzungen
+  const obstacles = useMemo<ComponentObstacle[]>(
+    () =>
+      components.map((c) => ({
+        id: c.id,
+        x: c.x,
+        y: c.y,
+        width: c.width,
+        height: c.height,
+      })),
+    [components]
+  );
+
+  // Berechne alle hindernis-freien rechtwinkligen Leitungen + Option-C-Kreuzungen
   const routedWires = useMemo(() => {
     const endpoints: RouteEndpoint[] = [];
     for (const conn of connections) {
@@ -382,8 +428,8 @@ export const WorkbenchCanvas: React.FC<WorkbenchCanvasProps> = ({
         side2: p2.side,
       });
     }
-    return routeAllOrthogonalWires(endpoints);
-  }, [compMap, connections]);
+    return routeAllOrthogonalWires(endpoints, obstacles);
+  }, [compMap, connections, obstacles]);
 
   // Sortiere Render-Reihenfolge: Fluidrohre unten (innerhalb in Verbindungsreihenfolge, sodass spätere Rohre per Option-C Lücke drüberlaufen), dann Analog & Elektrik mit Brückenbögen drüber
   const orderedConnections = useMemo(() => {
@@ -404,7 +450,8 @@ export const WorkbenchCanvas: React.FC<WorkbenchCanvasProps> = ({
         pos.side,
         cursorWorld.x,
         cursorWorld.y,
-        targetSide
+        targetSide,
+        obstacles
       );
     }
   }
@@ -588,10 +635,10 @@ export const WorkbenchCanvas: React.FC<WorkbenchCanvasProps> = ({
                       d={d}
                       fill="none"
                       stroke="#EF4444"
-                      strokeOpacity={0.35}
-                      strokeWidth={6}
+                      strokeOpacity={0.26}
+                      strokeWidth={7.5}
+                      strokeLinecap="round"
                       strokeLinejoin="round"
-                      filter="url(#glow-red)"
                     />
                   )}
 
@@ -649,10 +696,10 @@ export const WorkbenchCanvas: React.FC<WorkbenchCanvasProps> = ({
                       d={d}
                       fill="none"
                       stroke="#10B981"
-                      strokeOpacity={0.3}
-                      strokeWidth={5.5}
+                      strokeOpacity={0.26}
+                      strokeWidth={7}
+                      strokeLinecap="round"
                       strokeLinejoin="round"
-                      filter="url(#glow-emerald)"
                     />
                   )}
                   <path
@@ -751,10 +798,10 @@ export const WorkbenchCanvas: React.FC<WorkbenchCanvasProps> = ({
                     d={d}
                     fill="none"
                     stroke={baseColor}
-                    strokeOpacity={0.35}
-                    strokeWidth={10}
+                    strokeOpacity={0.28}
+                    strokeWidth={11}
+                    strokeLinecap="round"
                     strokeLinejoin="round"
-                    filter={isKat ? 'url(#glow-emerald)' : 'url(#glow-blue)'}
                   />
                 )}
 
@@ -907,7 +954,7 @@ export const WorkbenchCanvas: React.FC<WorkbenchCanvasProps> = ({
           <Unlink className="w-3.5 h-3.5 text-amber-400" />
           <span>
             {pendingWire.domain === 'electrical'
-              ? 'Elektrische Leitung: Kompatible Zielklemme anklicken'
+              ? 'Elektrische Leitung: Zielklemme oder weiteren Eingang zum Brücken anklicken'
               : pendingWire.domain === 'analog'
               ? 'Analogsignal (4–20mA / 0–10V): Kompatiblen Analogeingang anklicken'
               : 'Fluid-Rohrleitung: Kompatiblen Fluid-Anschluss anklicken'}

@@ -16,6 +16,7 @@ import {
   persistSavedSimulations,
 } from './engine/presets';
 import { SavedSimulationEntry, SerializedCircuit } from './engine/types';
+import { resolveComponentPlacement } from './utils/orthogonalRouting';
 
 export default function App() {
   const engineRef = useRef<SimulationEngine | null>(null);
@@ -105,7 +106,7 @@ export default function App() {
 
   const engine = engineRef.current!;
   const components = Array.from(engine.components.values());
-  const connections = engine.connections;
+  const connections = [...engine.connections];
   const faultReports = engine.getActiveFaultReports();
 
   const selectedComponent = selectedComponentId
@@ -238,6 +239,23 @@ export default function App() {
       const snappedX = Math.round(worldX / 4) * 4;
       const snappedY = Math.round(worldY / 4) * 4;
       const comp = ComponentRegistry.create(type, id, snappedX, snappedY, label);
+      const resolvedPos = resolveComponentPlacement(
+        comp.id,
+        snappedX,
+        snappedY,
+        comp.width,
+        comp.height,
+        Array.from(eng.components.values()).map((c) => ({
+          id: c.id,
+          x: c.x,
+          y: c.y,
+          width: c.width,
+          height: c.height,
+        })),
+        36
+      );
+      comp.x = resolvedPos.x;
+      comp.y = resolvedPos.y;
 
       if (comp instanceof FloatProbeComponent) {
         const tanks = Array.from(eng.components.values()).filter(

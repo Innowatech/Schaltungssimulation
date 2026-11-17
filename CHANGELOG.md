@@ -1,10 +1,21 @@
 # Changelog — Mechatronik & Fluidik Baukasten
 
-Alle Änderungen an diesem Projekt werden fortlaufend mit den Versionsnummern `1.0`, `1.1`, `1.2`, `1.3`, `1.4`, `1.5`, `1.6`, `1.7`, `1.8`, `1.9` usw. dokumentiert.
+Alle Änderungen an diesem Projekt werden fortlaufend mit den Versionsnummern `1.0`, `1.1`, `1.2`, `1.3`, `1.4`, `1.5`, `1.6`, `1.7`, `1.8`, `1.9`, `1.10`, `1.11` usw. dokumentiert.
 
-## [1.9] — Aktuelle Version
+## [1.11] — Aktuelle Version
+### Verbessert
+- **Hindernis-Umfahrung für alle Leitungen (Hanan-Grid A\*)**: Sämtliche Elektro-, Analog- und Fluidleitungen umfahren alle Bauteile konsequent außen herum — keine Leitung läuft mehr versteckt unter einem Bauteil oder Igel hindurch, inklusive Live-Neuverlegung beim Verschieben.
+- **Automatischer Mindestabstand beim Platzieren/Verschieben**: Liegt ein Bauteil beim Ablegen oder Verschieben näher als `36 px` an einem Nachbarbauteil, verschiebt es sich automatisch ein Stück auf den nächstgelegenen freien Platz, damit immer genug Leitungs- und Klemmenraum bleibt.
+
+## [1.10]
+### Hinzugefügt & Verbessert
+- **Elektrisches Brücken & Durchschleifen**: Direkte Drahtbrücken zwischen Eingängen am selben Bauteil (z. B. `A1 → 15` oder `A1 → B1` am Zeitrelais, `A1 → 11` am Schütz), Selbsthalte-Rückführungen (z. B. `18 → B1` / `14 → A1`) sowie Weiterbrücken von Bauteil zu Bauteil (`K1 A1 → K2 A1`) werden vollständig simuliert.
+- **Eigenschaften-Panel („Klemmen & Einzel-Leitungen“)**: Zeigt ab sofort unter jeder Klemme direkt deren volle Funktionsbeschreibung (z. B. `Öffner NC`, `Schließer NO`, `Wechsler COM`) und beschriftet das Einzel-Abklemmen klar mit **„Trennen“** samt `Ja/Nein`-Rückfrage.
+
+## [1.9]
 ### Behoben
 - **Bauteile einzeln verschieben**: `e.stopPropagation()` im `onPointerDown`-Handler von `ComponentNode` ergänzt und globales Fenster-Tracking für flüssiges Verschieben einzelner Bausteine ohne Mitbewegen des Hintergrunds umgesetzt.
+- **Sichtbarkeit neu angeschlossener Leitungen**: Unveränderliche Array-Zuweisung (`this.connections = [...this.connections, conn]`) in `SimulationEngine` ergänzt, sodass `useMemo` die Leitungsdarstellung sofort neu zeichnet; außerdem `objectBoundingBox`-SVG-Filter auf exakt geraden 90°-Linien durch reine Vektor-Glow-Pfade ersetzt.
 - **Kabel & Leitungen zuverlässig anschließen**: Verdrahtung unterstützt nun sowohl Klick-Klick als auch direktes Ziehen von Klemme zu Klemme mit vergrößerten 24-px-Klemmen-Trefferflächen und korrekter `z-index`-Schichtung über den Leitungsbahnen.
 
 ## [1.8]

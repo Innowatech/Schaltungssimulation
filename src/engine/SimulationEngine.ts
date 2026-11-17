@@ -84,7 +84,7 @@ export class SimulationEngine {
     const fromComp = this.components.get(fromComponentId);
     const toComp = this.components.get(toComponentId);
     if (!fromComp || !toComp) return null;
-    if (fromComponentId === toComponentId) return null;
+    if (fromComponentId === toComponentId && fromPortId === toPortId) return null;
 
     const fromPort = fromComp.getPorts().find((p) => p.id === fromPortId);
     const toPort = toComp.getPorts().find((p) => p.id === toPortId);
@@ -96,21 +96,46 @@ export class SimulationEngine {
     let dstCompId = toComponentId;
     let dstPortId = toPortId;
 
-    if (fromPort.direction === 'input' && toPort.direction === 'output') {
-      srcCompId = toComponentId;
-      srcPortId = toPortId;
-      dstCompId = fromComponentId;
-      dstPortId = fromPortId;
-    } else if (fromPort.direction === toPort.direction) {
-      return null;
+    const isElecBridge =
+      fromPort.domain === 'electrical' &&
+      fromPort.direction === 'input' &&
+      toPort.direction === 'input';
+
+    if (fromPort.domain === 'electrical') {
+      // Erlaubt: Ausgang <-> Eingang (auch auf demselben Bauteil) sowie Eingang <-> Eingang (Brücke)
+      if (fromPort.direction === 'output' && toPort.direction === 'output') {
+        return null;
+      }
+      if (fromPort.direction === 'input' && toPort.direction === 'output') {
+        srcCompId = toComponentId;
+        srcPortId = toPortId;
+        dstCompId = fromComponentId;
+        dstPortId = fromPortId;
+      }
+    } else {
+      // Fluid & Analog bleiben streng gerichtet zwischen verschiedenen Bauteilen
+      if (fromComponentId === toComponentId) return null;
+      if (fromPort.direction === 'input' && toPort.direction === 'output') {
+        srcCompId = toComponentId;
+        srcPortId = toPortId;
+        dstCompId = fromComponentId;
+        dstPortId = fromPortId;
+      } else if (fromPort.direction === toPort.direction) {
+        return null;
+      }
     }
 
     const duplicate = this.connections.find(
       (c) =>
-        c.fromComponentId === srcCompId &&
-        c.fromPortId === srcPortId &&
-        c.toComponentId === dstCompId &&
-        c.toPortId === dstPortId
+        (c.fromComponentId === srcCompId &&
+          c.fromPortId === srcPortId &&
+          c.toComponentId === dstCompId &&
+          c.toPortId === dstPortId) ||
+        (isElecBridge &&
+          c.fromComponentId === dstCompId &&
+          c.fromPortId === dstPortId &&
+          c.toComponentId === srcCompId &&
+          c.toPortId === srcPortId)
     );
     if (duplicate) return null;
 
@@ -127,7 +152,7 @@ export class SimulationEngine {
       flowRateLph: 0,
     };
 
-    this.connections.push(conn);
+    this.connections = [...this.connections, conn];
     this.evaluateInstant();
     return conn;
   }
@@ -308,6 +333,19 @@ export class SimulationEngine {
     this.solveElectricalAndAnalogNetwork();
   }
 
+  private isElectricalBridgeConnection(conn: Connection): boolean {
+    if (conn.domain !== 'electrical') return false;
+    const fromPort = this.components
+      .get(conn.fromComponentId)
+      ?.getPorts()
+      .find((p) => p.id === conn.fromPortId);
+    const toPort = this.components
+      .get(conn.toComponentId)
+      ?.getPorts()
+      .find((p) => p.id === conn.toPortId);
+    return fromPort?.direction === 'input' && toPort?.direction === 'input';
+  }
+
   /**
    * Ermittelt, ob ein 24V-Netzteil durch einen nachgeschalteten Kurzschluss überlastet ist.
    */
@@ -325,40 +363,85 @@ export class SimulationEngine {
         continue;
       }
 
-      const visited = new Set<string>([comp.id]);
-      const queue: string[] = [comp.id];
+      const visitedComps = new Set<string>([comp.id]);
+      const visitedInputNodes = new Set<string>();
+      const compQueue: string[] = [comp.id];
+      const inputQueue: Array<{ compId: string; portId: string }> = [];
 
-      while (queue.length > 0) {
-        const currId = queue.shift()!;
-        const outgoing = elecConns.filter((c) => c.fromComponentId === currId);
+      const enqueueInputNode = (cId: string, pId: string) => {
+        const key = `${cId}:${pId}`;
+        if (visitedInputNodes.has(key)) return;
+        visitedInputNodes.add(key);
+        inputQueue.push({ compId: cId, portId: pId });
+      };
 
-        for (const conn of outgoing) {
+      while (compQueue.length > 0 || inputQueue.length > 0) {
+        while (compQueue.length > 0) {
+          const currId = compQueue.shift()!;
           const srcComp = this.components.get(currId);
           if (!srcComp) continue;
 
-          if (!this.isPathConductingThroughComponent(srcComp, conn.fromPortId)) {
-            continue;
-          }
+          const outgoing = elecConns.filter(
+            (c) => c.fromComponentId === currId && !this.isElectricalBridgeConnection(c)
+          );
 
-          if (conn.fault === 'short_circuit') {
-            shortedSupplies.add(comp.id);
-            break;
+          for (const conn of outgoing) {
+            if (!this.isPathConductingThroughComponent(srcComp, conn.fromPortId)) {
+              continue;
+            }
+            if (conn.fault === 'short_circuit') {
+              shortedSupplies.add(comp.id);
+              break;
+            }
+            const dst = this.components.get(conn.toComponentId);
+            if (!dst) continue;
+            if (dst.fault === 'short_circuit') {
+              shortedSupplies.add(comp.id);
+              break;
+            }
+            enqueueInputNode(dst.id, conn.toPortId);
+            if (!visitedComps.has(dst.id)) {
+              visitedComps.add(dst.id);
+              compQueue.push(dst.id);
+            }
           }
-
-          const dst = this.components.get(conn.toComponentId);
-          if (!dst) continue;
-
-          if (dst.fault === 'short_circuit') {
-            shortedSupplies.add(comp.id);
-            break;
-          }
-
-          if (!visited.has(dst.id)) {
-            visited.add(dst.id);
-            queue.push(dst.id);
-          }
+          if (shortedSupplies.has(comp.id)) break;
         }
         if (shortedSupplies.has(comp.id)) break;
+
+        while (inputQueue.length > 0) {
+          const node = inputQueue.shift()!;
+          for (const bridge of elecConns) {
+            if (!this.isElectricalBridgeConnection(bridge)) continue;
+            let nextCompId: string | null = null;
+            let nextPortId: string | null = null;
+            if (bridge.fromComponentId === node.compId && bridge.fromPortId === node.portId) {
+              nextCompId = bridge.toComponentId;
+              nextPortId = bridge.toPortId;
+            } else if (bridge.toComponentId === node.compId && bridge.toPortId === node.portId) {
+              nextCompId = bridge.fromComponentId;
+              nextPortId = bridge.fromPortId;
+            }
+            if (!nextCompId || !nextPortId) continue;
+
+            if (bridge.fault === 'short_circuit') {
+              shortedSupplies.add(comp.id);
+              break;
+            }
+            const dst = this.components.get(nextCompId);
+            if (!dst) continue;
+            if (dst.fault === 'short_circuit') {
+              shortedSupplies.add(comp.id);
+              break;
+            }
+            enqueueInputNode(nextCompId, nextPortId);
+            if (!visitedComps.has(nextCompId)) {
+              visitedComps.add(nextCompId);
+              compQueue.push(nextCompId);
+            }
+          }
+          if (shortedSupplies.has(comp.id)) break;
+        }
       }
     }
 
@@ -401,34 +484,72 @@ export class SimulationEngine {
       (c) => c.domain === 'electrical' && c.fault !== 'open_circuit'
     );
     const visitedComps = new Set<string>();
+    const visitedInputNodes = new Set<string>();
     const queue: Array<{ compId: string; portId: string | null }> = [
       { compId: startCompId, portId: startPortId },
     ];
+    const bridgeQueue: Array<{ compId: string; portId: string }> = [];
     let totalAmps = 0;
 
-    while (queue.length > 0) {
-      const { compId, portId } = queue.shift()!;
-      const outgoing = elecConns.filter(
-        (c) => c.fromComponentId === compId && (portId === null || c.fromPortId === portId)
-      );
+    const visitTarget = (dstId: string, dstPortId: string) => {
+      const key = `${dstId}:${dstPortId}`;
+      if (!visitedInputNodes.has(key)) {
+        visitedInputNodes.add(key);
+        bridgeQueue.push({ compId: dstId, portId: dstPortId });
+      }
+      const dst = this.components.get(dstId);
+      if (!dst || visitedComps.has(dst.id)) return;
+      visitedComps.add(dst.id);
+      totalAmps += dst.getElectricalLoadAmps();
 
-      for (const conn of outgoing) {
-        if (conn.fault === 'short_circuit') {
-          totalAmps += 25.0;
-          continue;
-        }
-        const dst = this.components.get(conn.toComponentId);
-        if (!dst || visitedComps.has(dst.id)) continue;
-        visitedComps.add(dst.id);
-
-        totalAmps += dst.getElectricalLoadAmps();
-
-        for (const outP of dst.getPorts()) {
-          if (outP.domain === 'electrical' && outP.direction === 'output') {
-            if (this.isPathConductingThroughComponent(dst, outP.id)) {
-              queue.push({ compId: dst.id, portId: outP.id });
-            }
+      for (const outP of dst.getPorts()) {
+        if (outP.domain === 'electrical' && outP.direction === 'output') {
+          if (this.isPathConductingThroughComponent(dst, outP.id)) {
+            queue.push({ compId: dst.id, portId: outP.id });
           }
+        }
+      }
+    };
+
+    while (queue.length > 0 || bridgeQueue.length > 0) {
+      while (queue.length > 0) {
+        const { compId, portId } = queue.shift()!;
+        const outgoing = elecConns.filter(
+          (c) =>
+            !this.isElectricalBridgeConnection(c) &&
+            c.fromComponentId === compId &&
+            (portId === null || c.fromPortId === portId)
+        );
+
+        for (const conn of outgoing) {
+          if (conn.fault === 'short_circuit') {
+            totalAmps += 25.0;
+            continue;
+          }
+          visitTarget(conn.toComponentId, conn.toPortId);
+        }
+      }
+
+      while (bridgeQueue.length > 0) {
+        const node = bridgeQueue.shift()!;
+        for (const bridge of elecConns) {
+          if (!this.isElectricalBridgeConnection(bridge)) continue;
+          let nextCompId: string | null = null;
+          let nextPortId: string | null = null;
+          if (bridge.fromComponentId === node.compId && bridge.fromPortId === node.portId) {
+            nextCompId = bridge.toComponentId;
+            nextPortId = bridge.toPortId;
+          } else if (bridge.toComponentId === node.compId && bridge.toPortId === node.portId) {
+            nextCompId = bridge.fromComponentId;
+            nextPortId = bridge.fromPortId;
+          }
+          if (!nextCompId || !nextPortId) continue;
+
+          if (bridge.fault === 'short_circuit') {
+            totalAmps += 25.0;
+            continue;
+          }
+          visitTarget(nextCompId, nextPortId);
         }
       }
     }
@@ -476,8 +597,18 @@ export class SimulationEngine {
         inputAnalog.set(comp.id, aIn);
       }
 
+      const directElecConns: Connection[] = [];
+      const bridgeElecConns: Connection[] = [];
       for (const conn of electricalConns) {
         if (conn.fault === 'open_circuit' || conn.fault === 'short_circuit') continue;
+        if (this.isElectricalBridgeConnection(conn)) {
+          bridgeElecConns.push(conn);
+        } else {
+          directElecConns.push(conn);
+        }
+      }
+
+      for (const conn of directElecConns) {
         const srcOutputs = outputElectrical.get(conn.fromComponentId);
         const sig = srcOutputs?.get(conn.fromPortId) ?? ZERO_VOLT;
         const dstInputs = inputElectrical.get(conn.toComponentId);
@@ -499,6 +630,63 @@ export class SimulationEngine {
             pulseRatePerHour: mergedPulseRate > 0 ? mergedPulseRate : undefined,
           };
           dstInputs.set(conn.toPortId, nextSig);
+        }
+      }
+
+      // Elektrische Brücken (Eingang <-> Eingang, z. B. A1 -> 15 oder K1.A1 -> K2.A1) bidirektional ausbreiten
+      if (bridgeElecConns.length > 0) {
+        const mergeBridgeSide = (
+          srcCompId: string,
+          srcPortId: string,
+          dstCompId: string,
+          dstPortId: string
+        ): boolean => {
+          const srcSig = inputElectrical.get(srcCompId)?.get(srcPortId);
+          if (!srcSig) return false;
+          const hasActivity =
+            srcSig.energized ||
+            (srcSig.pulseDeltaCount && srcSig.pulseDeltaCount > 0) ||
+            (srcSig.pulseRatePerHour && srcSig.pulseRatePerHour > 0);
+          if (!hasActivity) return false;
+
+          const dstMap = inputElectrical.get(dstCompId);
+          if (!dstMap) return false;
+          const prevDst = dstMap.get(dstPortId) ?? ZERO_VOLT;
+
+          const nextEnergized = Boolean(prevDst.energized) || srcSig.energized;
+          const nextVoltage = Math.max(prevDst.voltage ?? 0, srcSig.energized ? srcSig.voltage : 0);
+          const nextDelta = Math.max(prevDst.pulseDeltaCount ?? 0, srcSig.pulseDeltaCount ?? 0);
+          const nextRate = Math.max(prevDst.pulseRatePerHour ?? 0, srcSig.pulseRatePerHour ?? 0);
+
+          if (
+            nextEnergized !== Boolean(prevDst.energized) ||
+            nextVoltage !== (prevDst.voltage ?? 0) ||
+            nextDelta !== (prevDst.pulseDeltaCount ?? 0) ||
+            nextRate !== (prevDst.pulseRatePerHour ?? 0)
+          ) {
+            dstMap.set(dstPortId, {
+              domain: 'electrical',
+              energized: nextEnergized,
+              voltage: nextVoltage,
+              pulseDeltaCount: nextDelta > 0 ? nextDelta : undefined,
+              pulseRatePerHour: nextRate > 0 ? nextRate : undefined,
+            });
+            return true;
+          }
+          return false;
+        };
+
+        for (let hop = 0; hop <= bridgeElecConns.length; hop++) {
+          let bridgeChanged = false;
+          for (const b of bridgeElecConns) {
+            if (mergeBridgeSide(b.fromComponentId, b.fromPortId, b.toComponentId, b.toPortId)) {
+              bridgeChanged = true;
+            }
+            if (mergeBridgeSide(b.toComponentId, b.toPortId, b.fromComponentId, b.fromPortId)) {
+              bridgeChanged = true;
+            }
+          }
+          if (!bridgeChanged) break;
         }
       }
 
@@ -574,9 +762,15 @@ export class SimulationEngine {
         conn.voltage = 0;
         continue;
       }
-      const sig = outputElectrical.get(conn.fromComponentId)?.get(conn.fromPortId) ?? ZERO_VOLT;
-      conn.active = sig.energized;
-      conn.voltage = sig.voltage;
+      if (this.isElectricalBridgeConnection(conn)) {
+        const sig = inputElectrical.get(conn.fromComponentId)?.get(conn.fromPortId) ?? ZERO_VOLT;
+        conn.active = sig.energized;
+        conn.voltage = sig.voltage;
+      } else {
+        const sig = outputElectrical.get(conn.fromComponentId)?.get(conn.fromPortId) ?? ZERO_VOLT;
+        conn.active = sig.energized;
+        conn.voltage = sig.voltage;
+      }
     }
 
     for (const conn of analogConns) {

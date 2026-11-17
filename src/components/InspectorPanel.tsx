@@ -1486,9 +1486,18 @@ export const InspectorPanel: React.FC<InspectorPanelProps> = ({
                     key={p.id}
                     className="bg-[#141E2E] border border-[#223044] rounded px-2.5 py-1.5 space-y-1.5"
                   >
-                    <div className="flex items-center justify-between">
-                      <span className="font-mono text-[11px] text-slate-200">{p.label}</span>
-                      <span className={`font-mono text-[11px] ${valColor}`}>{valText}</span>
+                    <div className="flex items-start justify-between gap-2">
+                      <div className="min-w-0">
+                        <div className="font-mono text-[11px] font-semibold text-slate-200">
+                          {p.label}
+                        </div>
+                        {p.description && (
+                          <div className="text-[10px] text-slate-400 leading-tight">
+                            {p.description}
+                          </div>
+                        )}
+                      </div>
+                      <span className={`font-mono text-[11px] shrink-0 ${valColor}`}>{valText}</span>
                     </div>
 
                     {portConns.map((c) => {
@@ -1498,6 +1507,7 @@ export const InspectorPanel: React.FC<InspectorPanelProps> = ({
                       const otherComp = components.find((item) => item.id === otherCompId);
                       const otherPort = otherComp?.getPorts().find((op) => op.id === otherPortId);
                       const isConfirming = confirmingConnId === c.id;
+                      const isSelfBridge = otherCompId === selectedComponent.id;
 
                       return (
                         <div
@@ -1513,8 +1523,11 @@ export const InspectorPanel: React.FC<InspectorPanelProps> = ({
                             className="text-slate-300 hover:text-sky-300 truncate text-left flex-1 cursor-pointer"
                             title="Leitung auswählen"
                           >
-                            {isOutgoing ? '→' : '←'} {otherComp?.label ?? '?'}{' '}
-                            <span className="font-mono text-slate-400">({otherPort?.label ?? otherPortId})</span>
+                            {isSelfBridge
+                              ? `Brücke ↔ ${otherPort?.label ?? otherPortId}`
+                              : `${isOutgoing ? '→' : '←'} ${otherComp?.label ?? '?'} (${
+                                  otherPort?.label ?? otherPortId
+                                })`}
                           </button>
 
                           {isConfirming ? (
@@ -1543,10 +1556,11 @@ export const InspectorPanel: React.FC<InspectorPanelProps> = ({
                             <button
                               type="button"
                               onClick={() => setConfirmingConnId(c.id)}
-                              title="Diese Leitung einzeln trennen"
-                              className="p-1 rounded text-slate-400 hover:text-red-300 hover:bg-red-500/15 transition-colors cursor-pointer shrink-0"
+                              title="Diese einzelne Leitung trennen"
+                              className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] text-slate-300 bg-[#0B111A] border border-[#243247] hover:text-red-300 hover:border-red-500/50 hover:bg-red-500/15 transition-colors cursor-pointer shrink-0"
                             >
-                              <Unlink className="w-3 h-3" />
+                              <Unlink className="w-2.5 h-2.5" />
+                              <span>Trennen</span>
                             </button>
                           )}
                         </div>
