@@ -13,6 +13,7 @@ import {
 import { ComponentNode, PendingWireStart } from './ComponentNode';
 
 interface WorkbenchCanvasProps {
+  theme: 'dark' | 'light';
   components: SimComponent[];
   connections: Connection[];
   selectedComponentId: string | null;
@@ -39,6 +40,7 @@ interface WorkbenchCanvasProps {
 const DRAG_THRESHOLD_PX = 5;
 
 export const WorkbenchCanvas: React.FC<WorkbenchCanvasProps> = ({
+  theme,
   components,
   connections,
   selectedComponentId,
@@ -309,22 +311,56 @@ export const WorkbenchCanvas: React.FC<WorkbenchCanvasProps> = ({
     };
   };
 
-  const handleWheel = (e: React.WheelEvent) => {
-    e.preventDefault();
+  useEffect(() => {
+    const el = containerRef.current;
+    if (!el) return;
+
+    const handleNativeWheel = (e: WheelEvent) => {
+      e.preventDefault();
+      e.stopPropagation();
+
+      const rect = el.getBoundingClientRect();
+      const { pan: curPan, zoom: curZoom, onPanZoomChange: updatePanZoom } = latestPropsRef.current;
+
+      const stepSize =
+        Math.abs(e.deltaY) >= 40
+          ? 0.05
+          : Math.max(0.015, Math.min(0.05, Math.abs(e.deltaY) * 0.0012));
+      const delta = e.deltaY < 0 ? stepSize : -stepSize;
+      const nextZoom = Math.max(0.35, Math.min(2.0, Math.round((curZoom + delta) * 100) / 100));
+      if (nextZoom === curZoom) return;
+
+      const mouseX = e.clientX - rect.left;
+      const mouseY = e.clientY - rect.top;
+
+      const worldX = (mouseX - curPan.x) / curZoom;
+      const worldY = (mouseY - curPan.y) / curZoom;
+
+      const nextPanX = mouseX - worldX * nextZoom;
+      const nextPanY = mouseY - worldY * nextZoom;
+      updatePanZoom({ x: nextPanX, y: nextPanY }, nextZoom);
+    };
+
+    el.addEventListener('wheel', handleNativeWheel, { passive: false });
+    return () => el.removeEventListener('wheel', handleNativeWheel);
+  }, []);
+
+  const applyButtonZoom = (delta: number) => {
+    const nextZoom = Math.max(0.35, Math.min(2.0, Math.round((zoom + delta) * 100) / 100));
+    if (nextZoom === zoom) return;
     const rect = containerRef.current?.getBoundingClientRect();
-    if (!rect) return;
-
-    const factor = e.deltaY < 0 ? 1.08 : 0.92;
-    const nextZoom = Math.max(0.35, Math.min(2.0, zoom * factor));
-    const mouseX = e.clientX - rect.left;
-    const mouseY = e.clientY - rect.top;
-
-    const worldX = (mouseX - pan.x) / zoom;
-    const worldY = (mouseY - pan.y) / zoom;
-
-    const nextPanX = mouseX - worldX * nextZoom;
-    const nextPanY = mouseY - worldY * nextZoom;
-    onPanZoomChange({ x: nextPanX, y: nextPanY }, nextZoom);
+    if (!rect) {
+      onPanZoomChange(pan, nextZoom);
+      return;
+    }
+    const centerX = rect.width / 2;
+    const centerY = rect.height / 2;
+    const worldX = (centerX - pan.x) / zoom;
+    const worldY = (centerY - pan.y) / zoom;
+    onPanZoomChange(
+      { x: centerX - worldX * nextZoom, y: centerY - worldY * nextZoom },
+      nextZoom
+    );
   };
 
   const handleDrop = (e: React.DragEvent) => {
@@ -458,12 +494,15 @@ export const WorkbenchCanvas: React.FC<WorkbenchCanvasProps> = ({
 
   const selectedRoute = selectedConnectionId ? routedWires.get(selectedConnectionId) : undefined;
 
+  const isLight = theme === 'light';
+  const canvasMaskColor = isLight ? '#F1F5F9' : '#0B111A';
+  const labelBgColor = isLight ? '#FFFFFF' : '#0B111A';
+
   return (
     <main
       ref={containerRef}
       onContextMenu={(e) => e.preventDefault()}
       onPointerDown={handleCanvasPointerDown}
-      onWheel={handleWheel}
       onDragOver={(e) => {
         e.preventDefault();
         e.dataTransfer.dropEffect = 'copy';
@@ -471,7 +510,7 @@ export const WorkbenchCanvas: React.FC<WorkbenchCanvasProps> = ({
       onDrop={handleDrop}
       className="no-context-touch relative flex-1 bg-[#0B111A] overflow-hidden select-none touch-none"
       style={{
-        backgroundImage: `radial-gradient(circle, #1E2D42 1px, transparent 1px)`,
+        backgroundImage: `radial-gradient(circle, ${isLight ? '#CBD5E1' : '#1E2D42'} 1px, transparent 1px)`,
         backgroundSize: `${24 * zoom}px ${24 * zoom}px`,
         backgroundPosition: `${pan.x}px ${pan.y}px`,
       }}
@@ -569,7 +608,7 @@ export const WorkbenchCanvas: React.FC<WorkbenchCanvasProps> = ({
                       y1={m.y1}
                       x2={m.x2}
                       y2={m.y2}
-                      stroke="#0B111A"
+                      stroke={canvasMaskColor}
                       strokeWidth={16}
                       strokeLinecap="butt"
                     />
@@ -647,10 +686,14 @@ export const WorkbenchCanvas: React.FC<WorkbenchCanvasProps> = ({
                     fill="none"
                     stroke={
                       isSelected
-                        ? '#FBBF24'
+                        ? '#F59E0B'
                         : energized
                         ? '#EF4444'
                         : isHovered
+                        ? isLight
+                          ? '#475569'
+                          : '#94A3B8'
+                        : isLight
                         ? '#94A3B8'
                         : '#475569'
                     }
@@ -707,10 +750,14 @@ export const WorkbenchCanvas: React.FC<WorkbenchCanvasProps> = ({
                     fill="none"
                     stroke={
                       isSelected
-                        ? '#FBBF24'
+                        ? '#F59E0B'
                         : active
                         ? '#10B981'
                         : isHovered
+                        ? isLight
+                          ? '#475569'
+                          : '#94A3B8'
+                        : isLight
                         ? '#94A3B8'
                         : '#475569'
                     }
@@ -726,16 +773,16 @@ export const WorkbenchCanvas: React.FC<WorkbenchCanvasProps> = ({
                         width="56"
                         height="18"
                         rx="4"
-                        fill="#0B111A"
-                        fillOpacity={0.92}
-                        stroke={active ? '#10B981' : '#334155'}
+                        fill={labelBgColor}
+                        fillOpacity={0.94}
+                        stroke={active ? '#10B981' : isLight ? '#CBD5E1' : '#334155'}
                         strokeWidth="1"
                       />
                       <text
                         x="0"
                         y="2.5"
                         textAnchor="middle"
-                        fill={active ? '#6EE7B7' : '#94A3B8'}
+                        fill={active ? (isLight ? '#047857' : '#6EE7B7') : isLight ? '#475569' : '#94A3B8'}
                         fontSize="9.5"
                         fontFamily="monospace"
                         fontWeight="600"
@@ -776,7 +823,7 @@ export const WorkbenchCanvas: React.FC<WorkbenchCanvasProps> = ({
                     y1={m.y1}
                     x2={m.x2}
                     y2={m.y2}
-                    stroke="#0B111A"
+                    stroke={canvasMaskColor}
                     strokeWidth={16}
                     strokeLinecap="butt"
                   />
@@ -787,7 +834,7 @@ export const WorkbenchCanvas: React.FC<WorkbenchCanvasProps> = ({
                 <path
                   d={d}
                   fill="none"
-                  stroke={isSelected ? '#FBBF24' : '#1E293B'}
+                  stroke={isSelected ? '#F59E0B' : isLight ? '#CBD5E1' : '#1E293B'}
                   strokeWidth={8.5}
                   strokeLinecap="round"
                   strokeLinejoin="round"
@@ -808,7 +855,17 @@ export const WorkbenchCanvas: React.FC<WorkbenchCanvasProps> = ({
                 <path
                   d={d}
                   fill="none"
-                  stroke={flowing ? baseColor : isHovered ? '#64748B' : '#334155'}
+                  stroke={
+                    flowing
+                      ? baseColor
+                      : isHovered
+                      ? isLight
+                        ? '#475569'
+                        : '#64748B'
+                      : isLight
+                      ? '#94A3B8'
+                      : '#334155'
+                  }
                   strokeWidth={4.5}
                   strokeLinecap="round"
                   strokeLinejoin="round"
@@ -835,16 +892,26 @@ export const WorkbenchCanvas: React.FC<WorkbenchCanvasProps> = ({
                       width="60"
                       height="18"
                       rx="4"
-                      fill="#0B111A"
-                      fillOpacity={0.92}
-                      stroke={flowing ? baseColor : '#334155'}
+                      fill={labelBgColor}
+                      fillOpacity={0.94}
+                      stroke={flowing ? baseColor : isLight ? '#CBD5E1' : '#334155'}
                       strokeWidth="1"
                     />
                     <text
                       x="0"
                       y="2.5"
                       textAnchor="middle"
-                      fill={flowing ? textColor : '#94A3B8'}
+                      fill={
+                        flowing
+                          ? isLight
+                            ? isKat
+                              ? '#047857'
+                              : '#0369A1'
+                            : textColor
+                          : isLight
+                          ? '#475569'
+                          : '#94A3B8'
+                      }
                       fontSize="9.5"
                       fontFamily="monospace"
                       fontWeight="600"
@@ -980,13 +1047,11 @@ export const WorkbenchCanvas: React.FC<WorkbenchCanvasProps> = ({
         </div>
       )}
 
-      <div className="absolute bottom-3 left-3 flex items-center gap-1 bg-[#101826]/95 border border-[#223044] rounded-md p-1 z-30">
+      <div className="absolute bottom-3 left-3 flex items-center gap-1 bg-[#101826]/95 border border-[#223044] rounded-md p-1 z-30 shadow-md">
         <button
           type="button"
-          onClick={() =>
-            onPanZoomChange(pan, Math.max(0.35, Math.round((zoom - 0.1) * 100) / 100))
-          }
-          title="Herauszoomen"
+          onClick={() => applyButtonZoom(-0.05)}
+          title="Herauszoomen (-5%)"
           className="p-1 text-slate-300 hover:text-white hover:bg-[#19263A] rounded cursor-pointer"
         >
           <Minus className="w-3.5 h-3.5" />
@@ -996,14 +1061,16 @@ export const WorkbenchCanvas: React.FC<WorkbenchCanvasProps> = ({
         </span>
         <button
           type="button"
-          onClick={() =>
-            onPanZoomChange(pan, Math.min(2.0, Math.round((zoom + 0.1) * 100) / 100))
-          }
-          title="Hineinzoomen"
+          onClick={() => applyButtonZoom(0.05)}
+          title="Hineinzoomen (+5%)"
           className="p-1 text-slate-300 hover:text-white hover:bg-[#19263A] rounded cursor-pointer"
         >
           <Plus className="w-3.5 h-3.5" />
         </button>
+      </div>
+
+      <div className="absolute bottom-3 right-3 px-2.5 py-1 rounded-md bg-[#101826]/90 border border-[#223044] text-[11px] font-mono text-slate-400 select-none pointer-events-none z-20 shadow-sm">
+        © 2026 @MAT
       </div>
     </main>
   );

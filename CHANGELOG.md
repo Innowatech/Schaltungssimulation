@@ -1,8 +1,16 @@
 # Changelog — Mechatronik & Fluidik Baukasten
 
-Alle Änderungen an diesem Projekt werden fortlaufend mit den Versionsnummern `1.0`, `1.1`, `1.2`, `1.3`, `1.4`, `1.5`, `1.6`, `1.7`, `1.8`, `1.9`, `1.10`, `1.11`, `1.12`, `1.13`, `1.14`, `1.15` usw. dokumentiert.
+Alle Änderungen an diesem Projekt werden fortlaufend mit den Versionsnummern `1.0`, `1.1`, `1.2`, `1.3`, `1.4`, `1.5`, `1.6`, `1.7`, `1.8`, `1.9`, `1.10`, `1.11`, `1.12`, `1.13`, `1.14`, `1.15`, `1.16` usw. dokumentiert.
 
-## [1.15] — Aktuelle Version
+## [1.16] — Aktuelle Version
+### Hinzugefügt & Verbessert
+- **Hell-/Dunkel-Umschaltung**: Über den Button in der oberen Leiste lässt sich die gesamte Oberfläche inkl. Arbeitsfläche, Bauteilen, Leitungen und Seitenleisten zwischen Dunkel- und Hell-Modus umschalten.
+- **Proportionaler Zeitsprung („Sprung“ neben Zeit-Anzeige)**: Ermöglicht das direkte Vorspulen um feste Zeitspannen (`+1 Min` bis `+24 Std`) oder direkt auf eine Zielzeit (z. B. `23:30`). Füllstände, Zeitrelais und Schaltzustände werden dabei ereignisgenau proportional mitberechnet und lassen sich danach nahtlos mit dem Zeitraffer weiterführen.
+- **Mausrad-Zoom, 5%-Zoomstufen & PWA-Fix**: Das Mausrad zoomt direkt an der Zeigerposition (non-passive Listener + `fixed inset-0`-Layout), sodass die obere Kopfleiste auch in der installierten PWA beim Zoomen immer sichtbar bleibt. Die manuellen `+/-`-Buttons zoomen nun in feinen `5%`-Schritten.
+- **Kopfleisten-Scroll-Pfeile & gespiegeltes Eigenschaften-Panel**: Pfeile an den Rändern der Kopfleiste signalisieren weitere Werkzeuge zum Scrollen; der Button zum Ausblenden des Eigenschaften-Panels liegt jetzt spiegelbildlich zur Bauteil-Bibliothek links direkt an der Arbeitsfläche.
+- **Copyright-Vermerk**: `© 2026 @MAT` dezent auf der Arbeitsfläche und im Changelog hinterlegt.
+
+## [1.15]
 ### Hinzugefügt & Verbessert
 - **Automatischer 24V-Potentialverteiler (Klemmblock X1) beim JSON-Import**: Beim Laden von externen Projekt-Dateien (wie `katholyte.json`) wird nun vollautomatisch ein zentraler 24V-Potentialverteiler (`terminal_block`) zwischen das Netzteil und alle Verbraucher geschaltet. Alle 24V-Versorgungsleitungen (wie `A1` und `15` der Zeitrelais) werden sauber über die Klemmen `out_1`, `out_2` usw. des Klemmblocks verteilt, exakt wie im professionellen Schaltschrankbau.
 

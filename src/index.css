@@ -6,10 +6,21 @@
     --font-mono: 'IBM Plex Mono', ui-monospace, SFMono-Regular, monospace;
   }
 
+  html,
+  body {
+    overscroll-behavior: none;
+    touch-action: manipulation;
+  }
+
   body {
     font-family: var(--font-sans);
     background-color: #0B111A;
     color: #F1F5F9;
+  }
+
+  html.theme-light body {
+    background-color: #F1F5F9;
+    color: #0F172A;
   }
 
   .font-mono {
@@ -82,4 +93,159 @@
 
 ::-webkit-scrollbar-thumb:hover {
   background: #334155;
+}
+
+.no-scrollbar::-webkit-scrollbar {
+  display: none;
+}
+.no-scrollbar {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+
+/* ============================================================================
+   LIGHT THEME OVERRIDES (Industrielle helle Oberfläche)
+   ============================================================================ */
+.theme-light ::-webkit-scrollbar-track {
+  background: #F1F5F9;
+}
+.theme-light ::-webkit-scrollbar-thumb {
+  background: #CBD5E1;
+}
+.theme-light ::-webkit-scrollbar-thumb:hover {
+  background: #94A3B8;
+}
+
+.theme-light .bg-\[\#0B111A\],
+.theme-light .bg-\[\#0B111A\]\/95,
+.theme-light .bg-\[\#0B111A\]\/90,
+.theme-light .bg-\[\#0B111A\]\/85,
+.theme-light .bg-\[\#0B111A\]\/80,
+.theme-light .bg-\[\#0B111A\]\/60 {
+  background-color: #F1F5F9 !important;
+}
+
+.theme-light .bg-\[\#080D14\],
+.theme-light .bg-\[\#090E16\] {
+  background-color: #E2E8F0 !important;
+}
+
+.theme-light .bg-\[\#0E1522\],
+.theme-light .bg-\[\#0F1724\],
+.theme-light .bg-\[\#101826\],
+.theme-light .bg-\[\#101826\]\/95,
+.theme-light .bg-\[\#101826\]\/90 {
+  background-color: #FFFFFF !important;
+}
+
+.theme-light .bg-\[\#121D2E\],
+.theme-light .bg-\[\#141E2E\],
+.theme-light .bg-\[\#141E2E\]\/95 {
+  background-color: #FFFFFF !important;
+}
+
+.theme-light .bg-\[\#162133\],
+.theme-light .bg-\[\#19263A\],
+.theme-light .bg-\[\#19263B\] {
+  background-color: #F8FAFC !important;
+}
+
+.theme-light .hover\:bg-\[\#19263A\]:hover,
+.theme-light .hover\:bg-\[\#19263B\]:hover,
+.theme-light .hover\:bg-\[\#1D2B42\]:hover,
+.theme-light .hover\:bg-\[\#1B2639\]:hover {
+  background-color: #E2E8F0 !important;
+}
+
+.theme-light .bg-slate-800 {
+  background-color: #E2E8F0 !important;
+}
+.theme-light .bg-slate-700 {
+  background-color: #CBD5E1 !important;
+}
+
+.theme-light .border-\[\#1E2A3B\],
+.theme-light .border-\[\#1E2C42\],
+.theme-light .border-\[\#223044\],
+.theme-light .border-\[\#243247\],
+.theme-light .border-\[\#26364D\],
+.theme-light .border-\[\#2A3B55\],
+.theme-light .border-slate-600 {
+  border-color: #CBD5E1 !important;
+}
+
+.theme-light .hover\:border-\[\#3A5173\]:hover {
+  border-color: #94A3B8 !important;
+}
+
+.theme-light .text-slate-100,
+.theme-light .text-slate-200 {
+  color: #0F172A !important;
+}
+
+.theme-light .text-slate-300 {
+  color: #334155 !important;
+}
+
+.theme-light .text-slate-400 {
+  color: #475569 !important;
+}
+
+.theme-light .text-slate-500 {
+  color: #64748B !important;
+}
+
+.theme-light .hover\:text-white:hover,
+.theme-light .hover\:text-slate-100:hover,
+.theme-light .hover\:text-slate-200:hover {
+  color: #0F172A !important;
+}
+
+/* High-contrast semantic accent text on light backgrounds */
+.theme-light .text-sky-200,
+.theme-light .text-sky-300,
+.theme-light .text-sky-400 {
+  color: #0369A1 !important;
+}
+
+.theme-light .text-amber-200,
+.theme-light .text-amber-300,
+.theme-light .text-amber-400 {
+  color: #B45309 !important;
+}
+
+.theme-light .text-emerald-200,
+.theme-light .text-emerald-300,
+.theme-light .text-emerald-400 {
+  color: #047857 !important;
+}
+
+.theme-light .text-red-200,
+.theme-light .text-red-300,
+.theme-light .text-red-400 {
+  color: #B91C1C !important;
+}
+
+/* Keep solid action buttons crisp white */
+.theme-light .bg-sky-600,
+.theme-light .bg-red-600,
+.theme-light .bg-amber-600,
+.theme-light .bg-emerald-600 {
+  color: #FFFFFF !important;
+}
+
+.theme-light .bg-sky-600 *,
+.theme-light .bg-red-600 *,
+.theme-light .bg-amber-600 *,
+.theme-light .bg-emerald-600 * {
+  color: #FFFFFF !important;
+}
+
+/* Preserve readable readout over fluid tank animation */
+.theme-light .tank-readout {
+  background-color: rgba(15, 23, 42, 0.72) !important;
+  color: #FFFFFF !important;
+}
+.theme-light .tank-readout * {
+  color: #FFFFFF !important;
 }

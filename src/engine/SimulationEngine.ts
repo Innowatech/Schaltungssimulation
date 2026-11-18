@@ -3,6 +3,7 @@ import { SimComponent, ZERO_ANALOG_MA, ZERO_VOLT } from './SimComponent';
 import {
   DosingPumpComponent,
   DrainConsumerComponent,
+  FloatProbeComponent,
   FluidTeeComponent,
   GeneratorComponent,
   GullyDrainComponent,
@@ -331,6 +332,87 @@ export class SimulationEngine {
     this.solveElectricalAndAnalogNetwork();
     this.solveFluidNetwork(dtSimSeconds);
     this.solveElectricalAndAnalogNetwork();
+  }
+
+  /**
+   * Schneller, ereignisgenauer Zeitsprung (z. B. +23h oder Zielzeit):
+   * Berechnet exakt nächste Schalt- und Füllstandsschwellen (Zeitrelais, Tankgrenzen, Schwimmerlanzen),
+   * damit alle Füllstände, Ventile und Timer exakt so reagieren, als wäre die Zeit real abgelaufen.
+   */
+  public fastForward(jumpSeconds: number): void {
+    if (!Number.isFinite(jumpSeconds) || jumpSeconds <= 0) return;
+
+    this.evaluateInstant();
+
+    let remaining = jumpSeconds;
+    const maxIterations = 800;
+    const maxChunk = Math.max(5, jumpSeconds / 250);
+
+    for (let iter = 0; iter < maxIterations && remaining > 0.001; iter++) {
+      let nextEventDt = remaining;
+
+      for (const comp of this.components.values()) {
+        if (comp instanceof TimerRelayComponent) {
+          const isTiming = Boolean(comp.runtimeState.isTiming);
+          if (isTiming) {
+            const target = comp.getTargetSeconds();
+            const elapsed = Number(comp.runtimeState.elapsedSeconds ?? 0);
+            const remTimer = target - elapsed;
+            if (remTimer > 0.05 && (comp.getTeleFunction() !== 'Bp' || target >= 5)) {
+              nextEventDt = Math.min(nextEventDt, remTimer);
+            }
+          }
+        } else if (comp instanceof TankComponent) {
+          const inLph = Number(comp.runtimeState.inflowLph ?? 0);
+          const outLph = Number(comp.runtimeState.outflowLph ?? 0);
+          const netLps = (inLph - outLph) / 3600;
+          if (Math.abs(netLps) > 1e-7) {
+            const cap = comp.getCapacity();
+            const level = comp.getLevelLiters();
+            const thresholds: number[] = [0, cap];
+
+            if (comp.getProbeMode() !== 'none') {
+              thresholds.push(
+                (Number(comp.params.dryPct ?? 10) / 100) * cap,
+                (Number(comp.params.preLowPct ?? 25) / 100) * cap,
+                (Number(comp.params.minPct ?? 40) / 100) * cap,
+                (Number(comp.params.maxPct ?? 80) / 100) * cap,
+                (Number(comp.params.overflowPct ?? 95) / 100) * cap
+              );
+            }
+
+            for (const other of this.components.values()) {
+              if (
+                other instanceof FloatProbeComponent &&
+                String(other.params.tankId ?? '') === comp.id
+              ) {
+                thresholds.push(
+                  (Number(other.params.dryPct ?? 10) / 100) * cap,
+                  (Number(other.params.minPct ?? 40) / 100) * cap,
+                  (Number(other.params.maxPct ?? 80) / 100) * cap
+                );
+              }
+            }
+
+            for (const th of thresholds) {
+              if (netLps > 0 && th > level + 0.02) {
+                nextEventDt = Math.min(nextEventDt, (th - level) / netLps);
+              } else if (netLps < 0 && th < level - 0.02) {
+                nextEventDt = Math.min(nextEventDt, (level - th) / -netLps);
+              }
+            }
+          }
+        }
+      }
+
+      const stepDt =
+        iter === maxIterations - 1
+          ? remaining
+          : Math.min(remaining, Math.max(0.25, Math.min(maxChunk, nextEventDt + 0.01)));
+
+      this.step(stepDt);
+      remaining -= stepDt;
+    }
   }
 
   private isElectricalBridgeConnection(conn: Connection): boolean {

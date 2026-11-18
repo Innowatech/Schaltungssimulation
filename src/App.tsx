@@ -53,6 +53,41 @@ export default function App() {
   const [showPdfPanel, setShowPdfPanel] = useState<boolean>(false);
   const pdfUrlRef = useRef<string | null>(null);
 
+  const [theme, setTheme] = useState<'dark' | 'light'>(() => {
+    try {
+      const saved = localStorage.getItem('mechafluid_theme');
+      return saved === 'light' ? 'light' : 'dark';
+    } catch {
+      return 'dark';
+    }
+  });
+
+  useEffect(() => {
+    document.documentElement.classList.toggle('theme-light', theme === 'light');
+    try {
+      localStorage.setItem('mechafluid_theme', theme);
+    } catch {
+      // ignore storage errors
+    }
+    const metaTheme = document.querySelector('meta[name="theme-color"]');
+    if (metaTheme) {
+      metaTheme.setAttribute('content', theme === 'light' ? '#FFFFFF' : '#0B111A');
+    }
+  }, [theme]);
+
+  useEffect(() => {
+    // Verhindert im installierten PWA-/Browser-Fenster, dass Strg+Mausrad oder Pinch das gesamte Fenster statt nur der Arbeitsfläche zoomt
+    const preventGlobalBrowserZoom = (e: WheelEvent) => {
+      if (e.ctrlKey || e.metaKey) {
+        e.preventDefault();
+      }
+    };
+    window.addEventListener('wheel', preventGlobalBrowserZoom, { passive: false });
+    return () => {
+      window.removeEventListener('wheel', preventGlobalBrowserZoom);
+    };
+  }, []);
+
   useEffect(() => {
     return () => {
       if (pdfUrlRef.current) {
@@ -138,6 +173,27 @@ export default function App() {
     engineRef.current?.step(1);
     forceRefresh();
   }, [forceRefresh]);
+
+  const handleFastForward = useCallback(
+    (jumpSeconds: number) => {
+      if (!engineRef.current || jumpSeconds <= 0) return;
+      engineRef.current.fastForward(jumpSeconds);
+      forceRefresh();
+
+      const whole = Math.round(jumpSeconds);
+      const d = Math.floor(whole / 86400);
+      const h = Math.floor((whole % 86400) / 3600);
+      const m = Math.floor((whole % 3600) / 60);
+      const s = whole % 60;
+      const parts: string[] = [];
+      if (d > 0) parts.push(`${d} T`);
+      if (h > 0) parts.push(`${h} Std`);
+      if (m > 0) parts.push(`${m} Min`);
+      if (s > 0 && d === 0 && h === 0) parts.push(`${s} s`);
+      showNotice(`Zeitsprung ausgeführt: +${parts.join(' ') || `${whole} s`} simuliert.`);
+    },
+    [forceRefresh, showNotice]
+  );
 
   const handleReset = useCallback(() => {
     engineRef.current?.reset();
@@ -497,11 +553,14 @@ export default function App() {
   }, []);
 
   return (
-    <div className="h-dvh w-screen flex flex-col bg-[#0B111A] text-slate-100 overflow-hidden">
+    <div className="fixed inset-0 flex flex-col bg-[#0B111A] text-slate-100 overflow-hidden overscroll-none">
       <TopControlBar
+        theme={theme}
+        onToggleTheme={() => setTheme((prev) => (prev === 'dark' ? 'light' : 'dark'))}
         isRunning={isRunning}
         onToggleRun={() => setIsRunning((r) => !r)}
         onStepOneSecond={handleStepOneSecond}
+        onFastForward={handleFastForward}
         onReset={handleReset}
         totalSimSeconds={engine.totalSimSeconds}
         timeScale={timeScale}
@@ -539,6 +598,7 @@ export default function App() {
 
         <div className="relative flex-1 flex min-w-0 min-h-0 overflow-hidden">
           <WorkbenchCanvas
+            theme={theme}
             components={components}
             connections={connections}
             selectedComponentId={selectedComponentId}

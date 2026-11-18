@@ -123,6 +123,15 @@ export const InspectorPanel: React.FC<InspectorPanelProps> = ({
 
   const renderPanelTabs = () => (
     <div className="flex items-stretch border-b border-[#223044] bg-[#0B111A]">
+      <button
+        type="button"
+        onClick={onCollapse}
+        title="Eigenschaften ausblenden"
+        aria-label="Eigenschaften ausblenden"
+        className="px-2.5 border-r border-[#223044] text-slate-400 hover:text-white hover:bg-[#19263B] transition-colors cursor-pointer shrink-0"
+      >
+        <PanelRightClose className="w-4 h-4" />
+      </button>
       <div className="grid grid-cols-2 flex-1">
         <button
           type="button"
@@ -149,15 +158,6 @@ export const InspectorPanel: React.FC<InspectorPanelProps> = ({
           Fehler ({faultReports.length})
         </button>
       </div>
-      <button
-        type="button"
-        onClick={onCollapse}
-        title="Eigenschaften ausblenden"
-        aria-label="Eigenschaften ausblenden"
-        className="px-2.5 border-l border-[#223044] text-slate-400 hover:text-white hover:bg-[#19263B] transition-colors cursor-pointer"
-      >
-        <PanelRightClose className="w-4 h-4" />
-      </button>
     </div>
   );
 

@@ -394,16 +394,19 @@ export class TimerRelayComponent extends SimComponent {
         }
 
         case 'Bp': {
-          // Blinker pausebeginnend 1:1
+          // Blinker pausebeginnend 1:1 (O(1) auch bei großen Zeitsprüngen)
           if (!wasU) {
             elapsed = 0;
             this.runtimeState.pulsePhaseOn = false;
           }
           isTiming = true;
           elapsed += dtSimSeconds;
-          while (elapsed >= target && target > 0) {
-            elapsed -= target;
-            this.runtimeState.pulsePhaseOn = !Boolean(this.runtimeState.pulsePhaseOn);
+          if (elapsed >= target && target > 0) {
+            const flips = Math.floor(elapsed / target);
+            elapsed -= flips * target;
+            if (flips % 2 === 1) {
+              this.runtimeState.pulsePhaseOn = !Boolean(this.runtimeState.pulsePhaseOn);
+            }
           }
           switched = Boolean(this.runtimeState.pulsePhaseOn);
           break;

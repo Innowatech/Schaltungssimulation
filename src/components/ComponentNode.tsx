@@ -527,11 +527,13 @@ export const ComponentNode: React.FC<ComponentNodeProps> = ({
               <div>0%</div>
             </div>
 
-            <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none drop-shadow">
-              <span className="font-mono text-sm font-bold text-white">{Math.round(liters)} L</span>
-              <span className="font-mono text-[10px] text-slate-200">
-                {pct.toFixed(1)}% / {cap} L
-              </span>
+            <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none">
+              <div className="tank-readout flex flex-col items-center px-2 py-0.5 rounded bg-slate-900/60 backdrop-blur-[1px]">
+                <span className="font-mono text-sm font-bold text-white">{Math.round(liters)} L</span>
+                <span className="font-mono text-[10px] text-slate-200">
+                  {pct.toFixed(1)}% / {cap} L
+                </span>
+              </div>
             </div>
           </div>
 

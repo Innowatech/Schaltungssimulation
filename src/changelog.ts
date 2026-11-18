@@ -5,9 +5,21 @@ export interface ChangelogEntry {
   changes: string[];
 }
 
-export const CURRENT_VERSION = '1.15';
+export const CURRENT_VERSION = '1.16';
 
 export const CHANGELOG_ENTRIES: ChangelogEntry[] = [
+  {
+    version: '1.16',
+    title: 'Hell/Dunkel-Design, Zeitsprung-Simulation, 5%-Mausrad-Zoom & UI-Feinschliff',
+    date: '2026-11-17',
+    changes: [
+      'Hell/Dunkel-Umschaltung: Vollständige helle Benutzeroberfläche per Klick in der Kopfleiste umschaltbar (inkl. Schaltplan-Fläche, Klemmen, Bauteilen und Diagnose).',
+      'Proportionaler Zeitsprung („Sprung“): Direkt auf beliebige Zielzeiten (z. B. 23:30) oder um feste Zeitspannen (+1 Min bis +24 Std) vorspulen — Tankfüllstände, Zeitrelais und Ventilschaltungen werden ereignisgenau so berechnet, als wäre die Zeit real abgelaufen.',
+      'Mausrad-Zoom & 5%-Stufen: Direktes Hinein-/Herauszoomen über das Mausrad an der Cursorposition, feine 5%-Schritte auf den +/- Buttons und fixierte Kopfleiste, sodass sie auch im installierten PWA-Modus beim Zoomen nie verschwindet.',
+      'Kopfleisten-Scroll-Pfeile & gespiegeltes Panel: Sichtbare Links-/Rechts-Pfeile zeigen verdeckte Werkzeuge in der Kopfleiste an; der Button zum Ausblenden des Eigenschaften-Panels sitzt nun links direkt an der Arbeitsfläche (spiegelbildlich zur Bauteil-Bibliothek).',
+      'Copyright-Hinweis „© 2026 @MAT“ auf Arbeitsfläche und im Changelog ergänzt.',
+    ],
+  },
   {
     version: '1.15',
     title: 'Automatischer 24V-Potentialverteiler (Klemmblock X1) beim JSON-Import',
