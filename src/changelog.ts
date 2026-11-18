@@ -5,9 +5,21 @@ export interface ChangelogEntry {
   changes: string[];
 }
 
-export const CURRENT_VERSION = '1.18';
+export const CURRENT_VERSION = '1.19';
 
 export const CHANGELOG_ENTRIES: ChangelogEntry[] = [
+  {
+    version: '1.19',
+    title: 'EPLAN-Schaltplan-PDF: Grafische Kontakte, B1-Zweige, permanentes +24V & klares Schriftfeld',
+    date: '2026-11-18',
+    changes: [
+      'EPLAN-/DIN-Aufmachung: Grüner Normrahmen mit oberer Spaltenleiste (0–9) und kompaktem Schriftfeld unten (Datum, Norm, Projekt, AnlagenSim, Copyright © 2026 #MAT, Blatt X von Y).',
+      'Deckblatt bereinigt: Prüf- und Montagehinweise entfernt; stattdessen klare Übersicht zu Anlagentyp, Steuerspannung, Aderfarben (+24 V DC = blau, 0 V DC = blau-weiß), Klemmleisten und Stückliste (BOM).',
+      'Grafische Schaltkontakte & Querverweise: Relais- und Zeitrelaiskontakte (15-16/18, 11-12/14, 21-22/24) sowie B1-Steuerzweige werden direkt zeichnerisch als Schließer/Öffner mit Klemmennummern und roten Blatt.Spalte-Querverweisen dargestellt.',
+      'Permanentes +24V auf A1 & Drahtfarben im Plan: Fest angeschlossene Spulen (wie -K1, -K2, -K3 über -X1) werden als durchgehende blaue Leitung gezeichnet; 0V-Leitungen und -Schiene erscheinen blau-weiß.',
+      'Lesbare Beschriftung unterhalb 0V: Betriebsarten, Zielzeiten und Bauteilnamen sitzen sauber im abgetrennten Feld weit unterhalb der 0V-Sammelschiene ohne Überlappung; Verdrahtungs-Hakenliste entfernt.',
+    ],
+  },
   {
     version: '1.18',
     title: 'Anlagenbau-Schaltplan (PDF), HTML-Animation, Prozessmodus, 230V AC (Orange) & Tank-Wellenschlag',

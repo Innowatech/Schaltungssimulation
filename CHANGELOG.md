@@ -1,8 +1,16 @@
 # Changelog — AnlagenSim (Mechatronik & Fluidik Baukasten)
 
-Alle Änderungen an diesem Projekt werden fortlaufend mit den Versionsnummern `1.0` bis `1.18` usw. dokumentiert.
+Alle Änderungen an diesem Projekt werden fortlaufend mit den Versionsnummern `1.0` bis `1.19` usw. dokumentiert.
 
-## [1.18] — Aktuelle Version
+## [1.19] — Aktuelle Version
+### Verbessert (Anlagenbau-Schaltplan PDF)
+- **EPLAN-/DIN-Layout**: Grüner Rahmen mit `0..9`-Spaltenleiste oben und kompaktem Schriftfeld (`Datum`, `Stand`, `Norm`, `AnlagenSim`, `Copyright © 2026 #MAT`, `Blatt X von Y`).
+- **Deckblatt ohne Prüfhinweis-Box & eure Aderfarben**: Zeigt direkt Anlagentyp, Spannungsversorgung, Aderfarbencode (`+24 V DC = blau`, `0 V DC = blau-weiß`), Klemmleisten-Übersicht und Stückliste (BOM).
+- **Grafische Kontakte & B1-Steuerkontakte**: Kontakte (`15-16/18`, `11-12/14`, `21-22/24`) inkl. angeschlossener `B1`-Steuerkontakte werden zeichnerisch als echte Schließer/Öffner mit Klemmennummern und roten `Blatt.Spalte`-Querverweisen dargestellt.
+- **Permanentes `+24V` auf `A1` & Leitungsfarben**: Direkt versorgte Zeitrelais-Spulen (z. B. über `-X1`) erhalten eine durchgehende blaue Leitung ohne unnötiges Schaltersymbol; `+24V` wird in **Blau** und `0V` in **Blau-Weiß** gezeichnet.
+- **Saubere Abstände unterhalb der `0V`-Schiene & ohne Hakenliste**: Zeitrelais-Betriebsart, Zielzeit, Bezeichnung und Kontaktspiegel liegen klar getrennt unter der `0V`-Sammelschiene; die Verdrahtungs-Hakenliste wurde entfernt.
+
+## [1.18]
 ### Hinzugefügt & Verbessert
 - **Modularer Anlagenbau-Schaltplan (PDF)**: Im Zahnrad-Menü generierbares DIN-A4-Querformat-PDF mit vier einzeln abwählbaren Abschnitten (Deckblatt/BOM, normnaher Stromlaufplan 230V/24V inkl. automatischer `0V`-Sammelschiene, `N`/`PE` & `24V→230V`-Koppelrelais, Klemmenplan/Hakenliste und Fluidik-R&I). Prüft zusätzlich alte JSONs (z. B. `A2` auf `+24V`) und korrigiert sie sicher auf `0V`.
 - **Eigenständige HTML-Prozessanimation (`.html`)**: Exportiert eine offlinefähige Animationsdatei (wählbar `24h`, `48h`, `72h` oder frei, Endlos-Schleife standardmäßig aktiv) ohne Kabel/Klemmen mit Zeitregler, Live-Ticker und Log-Drawer.

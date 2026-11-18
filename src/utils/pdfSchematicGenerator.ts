@@ -14,8 +14,8 @@ import {
 export interface PdfExportOptions {
   includeCoverAndBom: boolean;
   includeElectrical: boolean;
-  includeWiringAndTerminals: boolean;
   includeFluidAndAir: boolean;
+  includeTerminalPlan?: boolean;
 }
 
 interface BmkEntry {
@@ -36,39 +36,57 @@ interface NormalizedConnection {
   isSelfBridge: boolean;
 }
 
-interface WireChecklistItem {
-  nr: number;
-  fromBmk: string;
-  fromPort: string;
-  toBmk: string;
-  toPort: string;
-  potential: string;
-  colorSpec: string;
-  note: string;
-  isSynthesized: boolean;
-}
-
 interface CouplingRelayVirtual {
   bmk: string;
   label: string;
   airPumpId: string;
   airPumpBmk: string;
   airPumpLabel: string;
-  triggerSourceText: string;
+  triggerCompId?: string;
+  triggerPortId?: string;
+  triggerLabel: string;
 }
 
-interface CurrentPathItem {
-  pathNr: number;
+interface UpstreamContactInfo {
+  kind: 'permanent' | 'relay_no' | 'relay_nc' | 'switch_no' | 'changeover_no' | 'changeover_nc' | 'open';
+  contactBmk: string;
+  contactCompId?: string;
+  topTerm: string;
+  botTerm: string;
+  terminalTag: string; // z. B. "-X1:1"
+}
+
+interface SchematicColumnSpec {
+  id: string; // compId oder virtual key
+  compId?: string;
+  kind: 'b1_trigger' | 'device';
+  sheetNr: number;
+  colNr: number; // 0..9
+  refCode: string; // e.g. "2.0"
   title: string;
-  feederText: string;
-  contactsText: string[];
-  b1Text?: string;
-  coilBmk: string;
-  coilTopTerm: string;
-  coilBottomTerm: string;
-  coilKind: 'timer' | 'contactor' | 'valve' | 'lamp' | 'generator' | 'drain' | 'probe' | 'logic' | 'dosing';
-  functionCode?: string;
-  mirrorEntries: Array<{ term: string; kind: 'NO' | 'NC'; targetPathText: string }>;
+  modeLine: string;
+  bmk: string;
+  symbolType:
+    | 'b1_branch'
+    | 'timer'
+    | 'contactor'
+    | 'valve'
+    | 'lamp'
+    | 'generator'
+    | 'drain'
+    | 'dosing'
+    | 'logic'
+    | 'probe';
+  topTerm: string;
+  botTerm: string;
+  upstream: UpstreamContactInfo;
+  b1TargetRef?: string; // if this is a b1_trigger column, points right to coil col
+  targetDeviceId?: string; // for b1_trigger linking
+  mirrorRefs: Array<{
+    termLabel: string;
+    kind: 'NO' | 'NC';
+    targetRef: string;
+  }>;
 }
 
 const COMPONENT_SIZE_FALLBACK: Record<string, { w: number; h: number }> = {
@@ -103,10 +121,6 @@ const COMPONENT_SIZE_FALLBACK: Record<string, { w: number; h: number }> = {
   float_probe: { w: 188, h: 148 },
 };
 
-/**
- * Bereinigt Zeichenketten fuer Helvetica WinAnsi-Encoding in jsPDF
- * (Deutsche Umlaute bleiben voll erhalten, Sonderpfeile werden zu ASCII gewandelt).
- */
 function pdfSafe(input: string | number | undefined | null): string {
   const s = String(input ?? '');
   return s
@@ -153,60 +167,60 @@ function formatPortLabel(compType: string, portId: string): string {
     out_24v: '+24V',
     out_230v: 'L (230V~)',
     in_24v: '+24V IN',
-    in: '13 (IN)',
-    out: '14 (OUT)',
-    com: '11 (COM)',
-    nc: '12 (NC)',
-    no: '14 (NO)',
-    a1: 'A1 (+)',
-    a2: 'A2 (0V)',
-    b1: 'B1 (S)',
-    com_15: '15 (COM)',
-    nc_16: '16 (NC)',
-    no_18: '18 (NO)',
-    com_11: '11 (COM)',
-    nc_12: '12 (NC)',
-    no_14: '14 (NO)',
-    com_21: '21 (COM)',
-    nc_22: '22 (NC)',
-    no_24: '24 (NO)',
+    in: '13',
+    out: '14',
+    com: '11',
+    nc: '12',
+    no: '14',
+    a1: 'A1',
+    a2: 'A2',
+    b1: 'B1',
+    com_15: '15',
+    nc_16: '16',
+    no_18: '18',
+    com_11: '11',
+    nc_12: '12',
+    no_14: '14',
+    com_21: '21',
+    nc_22: '22',
+    no_24: '24',
     v24_in: '+24V',
-    max_in: 'MAX (+24V)',
-    min_in: 'MIN (+24V)',
-    lock_in: 'SPERRE (+24V)',
-    l_230v: 'L (230V~)',
-    air_out: 'Druckluft AUS',
-    air_in: 'Druckluft EIN',
-    fluid_p: 'P (Eingang)',
+    max_in: 'MAX',
+    min_in: 'MIN',
+    lock_in: 'SPERRE',
+    l_230v: 'L',
+    air_out: 'Luft AUS',
+    air_in: 'Luft EIN',
+    fluid_p: 'P',
     fluid_a: 'A (NC)',
     fluid_b: 'B (NO)',
     fluid_in: 'Fluid EIN',
     fluid_out: 'Fluid AUS',
     fluid_anolyte: 'Anolyt AUS',
     fluid_katholyte: 'Katholyte AUS',
-    out_dry: 'S1 Trocken',
-    out_pre_low: 'S2 Vor-Leer',
-    out_min: 'S3 MIN',
-    out_max: 'S4 MAX',
-    out_overflow: 'S5 Ueberlauf',
-    pulse_out: 'Impuls (+24V)',
+    out_dry: 'Trocken',
+    out_pre_low: 'Vor-Leer',
+    out_min: 'MIN',
+    out_max: 'MAX',
+    out_overflow: 'Ueberlauf',
+    pulse_out: 'Impuls AUS',
     pulse_in: 'Impuls EIN',
     analog_out: '4-20mA AUS',
     analog_in: '4-20mA EIN',
-    elec_in: 'U-IN (24V)',
-    thresh_out: 'Q Grenzwert',
+    elec_in: 'U-IN',
+    thresh_out: 'Q 24V',
     i1: 'I1',
     i2: 'I2',
     q: 'Q',
-    main_in: 'Hauptstrom EIN',
-    dosing_in: 'Impfung EIN',
+    main_in: 'Hauptstrom',
+    dosing_in: 'Impfung',
     fluid_in_1: 'EIN 1',
     fluid_in_2: 'EIN 2',
     fluid_out_1: 'AUS 1',
     fluid_out_2: 'AUS 2',
   };
   if (map[p]) return map[p];
-  if (p.startsWith('out_')) return `Kl. ${p.slice(4)}`;
+  if (p.startsWith('out_')) return `Kl.${p.slice(4)}`;
   if (p.startsWith('suction_')) return `Saug ${p.slice(8)}`;
   return p;
 }
@@ -225,9 +239,7 @@ function buildBmkEntries(components: SerializedComponent[]): Map<string, BmkEntr
 
   const nextBmk = (prefix: string): string => {
     let idx = (counters[prefix] ?? 0) + 1;
-    while (usedBmks.has(`-${prefix}${idx}`)) {
-      idx++;
-    }
+    while (usedBmks.has(`-${prefix}${idx}`)) idx++;
     counters[prefix] = idx;
     const bmk = `-${prefix}${idx}`;
     usedBmks.add(bmk);
@@ -246,86 +258,80 @@ function buildBmkEntries(components: SerializedComponent[]): Map<string, BmkEntr
       case 'power_230v':
         bmk = nextBmk('Q');
         categoryLabel = '230V AC Einspeisung (L/N/PE)';
-        specSummary = '230V AC 50Hz, L / N / PE mit Hauptschalter';
-        settingSummary = comp.params?.enabled === false ? 'Schalter: AUS' : 'Schalter: EIN';
+        specSummary = '230V AC 50Hz, L / N / PE Hauptschalter';
+        settingSummary = comp.params?.enabled === false ? 'AUS' : 'EIN';
         break;
       case 'power_24v':
         bmk = nextBmk('G');
         categoryLabel = '24V DC Netzteil (SELV)';
-        specSummary = 'Primaer 230V AC -> Sekundaer +24V DC / 0V';
-        settingSummary = comp.params?.enabled === false ? 'Netzteil: AUS' : 'Netzteil: EIN (24V)';
+        specSummary = '230V AC -> +24V DC / 0V';
+        settingSummary = comp.params?.enabled === false ? 'AUS' : 'EIN (24V DC)';
         break;
       case 'terminal_block':
         bmk = nextBmk('X');
         categoryLabel = '24V-Potentialverteiler';
-        specSummary = `Reihenklemmenblock ${Number(comp.params?.outputCount ?? 10)}-fach (+24V)`;
+        specSummary = `Reihenklemmleiste ${Number(comp.params?.outputCount ?? 10)}-fach`;
         settingSummary = `${Number(comp.params?.outputCount ?? 10)} Abgaenge`;
         break;
       case 'switch':
         bmk = nextBmk('S');
-        categoryLabel = 'Taster / Steuerschalter';
+        categoryLabel = 'Steuerschalter / Taster';
         specSummary = 'Schaltkontakt 13-14';
-        settingSummary = `Modus: ${String(comp.params?.mode ?? 'toggle')}`;
+        settingSummary = String(comp.params?.mode ?? 'toggle');
         break;
       case 'changeover_switch':
         bmk = nextBmk('S');
         categoryLabel = 'Wechselschalter';
-        specSummary = 'Umschalter 11 (COM) -> 12 (NC) / 14 (NO)';
-        settingSummary = comp.params?.switched ? 'Stellung II (11->14)' : 'Stellung I (11->12)';
+        specSummary = 'Umschalter 11 -> 12/14';
+        settingSummary = comp.params?.switched ? 'Stellung II' : 'Stellung I';
         break;
       case 'indicator_green':
       case 'indicator_red':
         bmk = nextBmk('H');
         categoryLabel = comp.type === 'indicator_red' ? 'Leuchtmelder Rot' : 'Leuchtmelder Gruen';
-        specSummary = 'LED-Melder 24V DC (X1 = +24V, X2 = 0V)';
-        settingSummary = comp.type === 'indicator_red' ? 'Farbe: Rot' : 'Farbe: Gruen';
+        specSummary = 'LED 24V DC (X1=+24V, X2=0V)';
+        settingSummary = comp.type === 'indicator_red' ? 'Rot' : 'Gruen';
         break;
       case 'timer_relay': {
         bmk = nextBmk('K');
-        categoryLabel = 'TELE ENYA E1ZM10 Zeitrelais';
-        specSummary = 'Spule A1(+24V)/A2(0V), B1, Wechsler 15-16/18';
+        categoryLabel = 'TELE E1ZM10 Zeitrelais';
+        specSummary = 'A1/A2(0V), B1, 15-16/18';
         const fn = String(comp.params?.teleFunction ?? 'E');
         const targetSec = getTimerTargetSeconds(comp);
-        settingSummary = `Fkt: ${fn} | Bereich: ${String(comp.params?.teleRange ?? '10s')} (${Number(
-          comp.params?.teleScalePct ?? 50
-        )}%) = ${formatTeleDuration(targetSec)}`;
+        settingSummary = `${fn} (${formatTeleDuration(targetSec)})`;
         break;
       }
       case 'contactor_relay':
         bmk = nextBmk('KA');
-        categoryLabel = 'Hilfsrelais / Schuetz (2x W)';
-        specSummary = 'Spule A1(+24V)/A2(0V), 11-12/14 & 21-22/24';
-        settingSummary = '2x potentialfreier Wechsler';
+        categoryLabel = 'Hilfsrelais (2x Wechsler)';
+        specSummary = 'A1/A2(0V), 11-12/14, 21-22/24';
+        settingSummary = '2x Wechsler';
         break;
       case 'current_transformer':
         bmk = nextBmk('T');
         categoryLabel = 'Stromwandler';
-        specSummary = '24V Messschleife -> Analogausgang';
-        settingSummary = `Max: ${Number(comp.params?.maxCurrentAmps ?? 10)} A -> ${String(
-          comp.params?.outputType ?? '4_20mA'
-        )}`;
+        specSummary = '24V -> Analog';
+        settingSummary = `Max ${Number(comp.params?.maxCurrentAmps ?? 10)}A`;
         break;
       case 'signal_transmitter':
         bmk = nextBmk('U');
         categoryLabel = 'Messumformer';
-        specSummary = 'Analog-/Spannungswandler + Q24V Grenzwert';
-        settingSummary = `${String(comp.params?.conversionMode ?? 'v10_to_ma')} | Schwelle ${Number(
-          comp.params?.thresholdPct ?? 50
-        )}%`;
+        specSummary = 'Analogwandler + Q24V';
+        settingSummary = `Schwelle ${Number(comp.params?.thresholdPct ?? 50)}%`;
         break;
       case 'logic_and':
       case 'logic_or':
       case 'logic_not':
         bmk = nextBmk('D');
         categoryLabel = `Logikgatter ${comp.type.replace('logic_', '').toUpperCase()}`;
-        specSummary = '24V Logikbaustein (inkl. 0V Referenz)';
+        specSummary = '24V Logik (+ 0V)';
         settingSummary = comp.type.replace('logic_', '').toUpperCase();
         break;
       case 'generator':
         bmk = nextBmk('E');
         categoryLabel = 'Erzeuger-Anlage';
-        specSummary = '24V Steuereingaenge (MAX/MIN/SPERRE), 0V GND';
-        settingSummary = `Anolyt ${Number(comp.params?.anolyteFlowLph ?? 50)} L/h | Katholyte ${Number(
+        specSummary = '24V Steuerung + 0V';
+        settingSummary = `Ano ${Number(comp.params?.anolyteFlowLph ?? 50)} / Kat ${Number(
           comp.params?.katholyteFlowLph ?? 8
         )} L/h`;
         break;
@@ -343,12 +349,12 @@ function buildBmkEntries(components: SerializedComponent[]): Map<string, BmkEntr
         );
         const medLabel = med === 'katholyte' ? 'Katholyte' : med === 'anolyte' ? 'Anolyt' : 'Wasser';
         categoryLabel = `Vorratsbehaelter (${medLabel})`;
-        specSummary = `${Number(comp.params?.capacityLiters ?? 500)} L | Lanze: ${String(
+        specSummary = `${Number(comp.params?.capacityLiters ?? 500)} L | ${String(
           comp.params?.probeMode ?? '3_points'
         )}`;
         settingSummary = `MIN ${Number(comp.params?.minPct ?? 40)}% / MAX ${Number(
           comp.params?.maxPct ?? 80
-        )}% | Start ${Number(comp.params?.initialLevelPct ?? 0)}%`;
+        )}%`;
         break;
       }
       case 'air_pump': {
@@ -358,75 +364,71 @@ function buildBmkEntries(components: SerializedComponent[]): Map<string, BmkEntr
         categoryLabel = `Luftpumpe AquaForte ${model}`;
         specSummary =
           pMode === 'external_24v'
-            ? '230V AC ueber 24V-Koppelrelais (L/N/PE + A1/A2)'
-            : pMode === 'fixed_power'
-            ? '230V AC Steckernetzteil (L/N/PE)'
-            : '230V AC Direktanschluss (L/N/PE)';
-        settingSummary = `Modell ${model} | Betrieb: ${pMode}`;
+            ? '230V AC ueber 24V Koppelrelais'
+            : '230V AC L/N/PE Direktanschluss';
+        settingSummary = `${model} (${pMode})`;
         break;
       }
       case 'dosing_pump':
         bmk = nextBmk('DP');
-        categoryLabel = `Dosierpumpe Grundfos ${String(comp.params?.model ?? 'DDA 17-7')}`;
-        specSummary = 'Steuerung 24V / Impuls / 4-20mA (+ 0V GND)';
-        settingSummary = `Modus: ${String(comp.params?.controlMode ?? 'manual')} | Soll: ${Number(
-          comp.params?.manualFlowLph ?? 5
-        )} L/h`;
+        categoryLabel = `Dosierpumpe ${String(comp.params?.model ?? 'DDA')}`;
+        specSummary = '24V / 4-20mA / Impuls (+0V)';
+        settingSummary = `${Number(comp.params?.manualFlowLph ?? 5)} L/h`;
         break;
       case 'valve_32':
         bmk = nextBmk('Y');
         categoryLabel = '3/2-Wege-Magnetventil';
-        specSummary = 'Spule A1(+24V)/A2(0V), Fluid P -> A(NC) / B(NO)';
-        settingSummary = 'Ruhestellung P->A / Bestromt P->B';
+        specSummary = 'A1(+24V)/A2(0V), P->A/B';
+        settingSummary = 'NC P->A / Bestr. P->B';
         break;
       case 'valve_22':
         bmk = nextBmk('Y');
         categoryLabel = '2/2-Wege-Magnetventil';
-        specSummary = 'Spule A1(+24V)/A2(0V), Nenn-Durchfluss';
-        settingSummary = `${String(comp.params?.normalState ?? 'NC')} | max. ${Number(
+        specSummary = 'A1(+24V)/A2(0V)';
+        settingSummary = `${String(comp.params?.normalState ?? 'NC')} | ${Number(
           comp.params?.flowRateLph ?? 200
         )} L/h`;
         break;
       case 'drain_consumer':
         bmk = nextBmk('V');
-        categoryLabel = 'Abnahmeventil / Verbraucher';
-        specSummary = '24V angesteuert (+24V / 0V GND)';
-        settingSummary = `Entnahme: ${Number(comp.params?.drainRateLph ?? 30)} L/h`;
+        categoryLabel = 'Verbraucher / Abnahme';
+        specSummary = '24V DC (+ 0V)';
+        settingSummary = `${Number(comp.params?.drainRateLph ?? 30)} L/h`;
         break;
       case 'water_meter':
         bmk = nextBmk('WM');
         categoryLabel = 'Kontakt-Wasserzaehler';
-        specSummary = 'Reed-Kontakt +24V Impuls / 4-20mA';
-        settingSummary = `${Number(comp.params?.litersPerPulse ?? 10)} L/Impuls`;
+        specSummary = 'Reed +24V / 4-20mA';
+        settingSummary = `${Number(comp.params?.litersPerPulse ?? 10)} L/Imp`;
         break;
       case 'main_water_line':
         bmk = nextBmk('W');
         categoryLabel = 'Hauptleitung Rohwasser';
-        specSummary = 'Versorgungsleitung';
+        specSummary = 'Zulaufleitung';
         settingSummary = `${Number(comp.params?.flowRateLph ?? 1000)} L/h`;
         break;
       case 'injection_point':
         bmk = nextBmk('I');
         categoryLabel = 'Impfstelle';
-        specSummary = 'Dosier-Einbindung in Hauptstrom';
+        specSummary = 'Dosier-Einbindung';
         settingSummary = 'Mischstrecke';
         break;
       case 'fluid_tee':
         bmk = nextBmk('FT');
         categoryLabel = 'T-Stueck (Fluid)';
-        specSummary = 'Rohr-Verteiler / Sammler';
-        settingSummary = String(comp.params?.teeMode ?? 'split_1to2');
+        specSummary = 'Verteiler / Sammler';
+        settingSummary = String(comp.params?.teeMode ?? 'split');
         break;
       case 'gully_drain':
         bmk = nextBmk('GD');
         categoryLabel = 'Gulli / Ablauf';
-        specSummary = 'Freier Verwurf / Kanalablauf';
-        settingSummary = 'Ablauf drucklos';
+        specSummary = 'Kanalablauf';
+        settingSummary = 'Drucklos';
         break;
       case 'float_probe':
         bmk = nextBmk('SL');
-        categoryLabel = 'Schwimmerlanze (Extern)';
-        specSummary = 'Potentialfreie Fuellstandskontakte';
+        categoryLabel = 'Schwimmerlanze';
+        specSummary = 'Potentialfreie Kontakte';
         settingSummary = `MIN ${Number(comp.params?.minPct ?? 40)}% / MAX ${Number(
           comp.params?.maxPct ?? 80
         )}%`;
@@ -448,55 +450,118 @@ function buildBmkEntries(components: SerializedComponent[]): Map<string, BmkEntr
   return result;
 }
 
-function drawPageChrome(
+/**
+ * EPLAN / DIN-angelehnter Rahmen mit gruener Linienfuehrung,
+ * Spaltenleiste 0..9 oben und kompaktem Schriftfeld unten.
+ */
+function drawEplanFrame(
   doc: jsPDF,
   circuitName: string,
-  sectionTitle: string,
-  pageNumber: number,
-  totalPages: number,
-  dateStr: string
+  sheetNr: number,
+  totalSheets: number,
+  dateStr: string,
+  showColumnGrid: boolean,
+  sectionTitle?: string
 ): void {
   const W = 297;
   const H = 210;
+  const left = 10;
+  const top = 8;
+  const right = W - 10;
+  const bottom = H - 8;
+  const gridLeft = 14;
+  const gridRight = right - 2;
+  const colW = (gridRight - gridLeft) / 10; // ~27.1 mm pro Spalte
 
-  // Aussenrahmen (DIN-angelehnt)
-  doc.setDrawColor(40, 52, 70);
-  doc.setLineWidth(0.5);
-  doc.rect(8, 8, W - 16, H - 16);
+  // Gruener EPLAN Rahmen
+  doc.setDrawColor(0, 128, 85);
+  doc.setLineWidth(0.45);
+  doc.rect(left, top, right - left, bottom - top);
 
-  // Kopfzeile
-  doc.setFillColor(241, 245, 249);
-  doc.rect(8, 8, W - 16, 12, 'F');
-  doc.line(8, 20, W - 8, 20);
+  if (showColumnGrid) {
+    // Obere Spaltenleiste 0..9 + "Bl."
+    doc.line(left, top + 6.5, right, top + 6.5);
+    doc.setFont('courier', 'normal');
+    doc.setFontSize(8);
+    doc.setTextColor(0, 110, 72);
+    for (let c = 0; c < 10; c++) {
+      const cx = gridLeft + c * colW;
+      if (c > 0) {
+        doc.setLineWidth(0.25);
+        doc.line(cx, top, cx, top + 6.5);
+      }
+      doc.text(String(c), cx + colW / 2, top + 4.6, { align: 'center' });
+    }
+    doc.setFontSize(7);
+    doc.text('Bl.', left + 2, top + 11);
+  } else if (sectionTitle) {
+    doc.line(left, top + 7, right, top + 7);
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(9);
+    doc.setTextColor(0, 110, 72);
+    doc.text(pdfSafe(sectionTitle), left + 4, top + 5);
+  }
 
-  doc.setFont('helvetica', 'bold');
-  doc.setFontSize(10);
+  // Schriftfeld unten (H - 21 bis H - 8 => 13 mm hoch)
+  const sfTop = bottom - 13;
+  doc.setDrawColor(0, 128, 85);
+  doc.setLineWidth(0.45);
+  doc.line(left, sfTop, right, sfTop);
+
+  // Vertikale Unterteilungen im Schriftfeld
+  const x1 = left + 52;
+  const x2 = left + 162;
+  const x3 = left + 214;
+  const x4 = right - 32;
+  doc.line(x1, sfTop, x1, bottom);
+  doc.line(x2, sfTop, x2, bottom);
+  doc.line(x3, sfTop, x3, bottom);
+  doc.line(x4, sfTop, x4, bottom);
+
+  // Linker Block: Datum & Aenderung
+  doc.setLineWidth(0.25);
+  doc.line(left, sfTop + 4.5, x1, sfTop + 4.5);
+  doc.line(left, sfTop + 9, x1, sfTop + 9);
+  doc.line(left + 22, sfTop, left + 22, bottom);
+  doc.setFont('courier', 'normal');
+  doc.setFontSize(6.2);
+  doc.setTextColor(0, 110, 72);
+  doc.text('Datum', left + 2, sfTop + 3.2);
+  doc.text(pdfSafe(dateStr), left + 24, sfTop + 3.2);
+  doc.text('Stand', left + 2, sfTop + 7.5);
+  doc.text('Anlagenbau', left + 24, sfTop + 7.5);
+  doc.text('Norm', left + 2, sfTop + 11.7);
+  doc.text('IEC 60617 / DIN', left + 24, sfTop + 11.7);
+
+  // Mitte: Projektname
+  doc.setFont('courier', 'bold');
+  doc.setFontSize(12);
   doc.setTextColor(15, 23, 42);
-  doc.text(pdfSafe(`AnlagenSim  |  ${circuitName}`), 12, 15.5);
+  doc.text(pdfSafe(circuitName).slice(0, 30), (x1 + x2) / 2, sfTop + 8.5, { align: 'center' });
 
-  doc.setFont('helvetica', 'normal');
-  doc.setFontSize(9);
-  doc.setTextColor(3, 105, 161);
-  doc.text(pdfSafe(sectionTitle), 148.5, 15.5, { align: 'center' });
-
-  doc.setTextColor(71, 85, 105);
-  doc.setFontSize(8.5);
-  doc.text(pdfSafe(`Blatt ${pageNumber} / ${totalPages}`), W - 12, 15.5, { align: 'right' });
-
-  // Fusszeilen-Schriftfeld
-  doc.setDrawColor(100, 116, 139);
-  doc.setLineWidth(0.3);
-  doc.line(8, H - 15, W - 8, H - 15);
-  doc.setFontSize(7.5);
-  doc.setTextColor(71, 85, 105);
-  doc.text(
-    pdfSafe('Anlagenbau-Dokumentation (inkl. 230V AC / 24V DC / 0V GND / N / PE)'),
-    12,
-    H - 10.2
-  );
-  doc.text(pdfSafe(`Erstellt: ${dateStr}`), 175, H - 10.2);
+  // AnlagenSim Brand + Copyright
   doc.setFont('helvetica', 'bold');
-  doc.text(pdfSafe('Copyright (c) 2026 #MAT'), W - 12, H - 10.2, { align: 'right' });
+  doc.setFontSize(9.5);
+  doc.setTextColor(15, 23, 42);
+  doc.text('AnlagenSim', (x2 + x3) / 2, sfTop + 5.8, { align: 'center' });
+  doc.setFont('courier', 'normal');
+  doc.setFontSize(6.5);
+  doc.setTextColor(71, 85, 105);
+  doc.text('Copyright (c) 2026 #MAT', (x2 + x3) / 2, sfTop + 10.6, { align: 'center' });
+
+  // Geprueft / Blattinfo
+  doc.setFont('courier', 'normal');
+  doc.setFontSize(6.8);
+  doc.setTextColor(0, 110, 72);
+  doc.text(pdfSafe(sectionTitle ? sectionTitle.split(':')[0] : 'Stromlaufplan').slice(0, 22), x3 + 2.5, sfTop + 5.5);
+  doc.text('230V AC / 24V DC / 0V', x3 + 2.5, sfTop + 10.5);
+
+  doc.setLineWidth(0.25);
+  doc.line(x4, sfTop + 6.5, right, sfTop + 6.5);
+  doc.setFontSize(7.5);
+  doc.setTextColor(15, 23, 42);
+  doc.text(pdfSafe(`Blatt  ${sheetNr}`), x4 + 3, sfTop + 4.5);
+  doc.text(pdfSafe(`von  ${totalSheets}  Bl.`), x4 + 3, sfTop + 10.8);
 }
 
 function drawTableRow(
@@ -506,25 +571,20 @@ function drawTableRow(
   colWidths: number[],
   cells: string[],
   rowHeight: number,
-  isHeader = false,
-  highlightWarn = false
+  isHeader = false
 ): void {
   if (isHeader) {
-    doc.setFillColor(30, 41, 59);
+    doc.setFillColor(0, 110, 72);
     doc.rect(x, y, colWidths.reduce((a, b) => a + b, 0), rowHeight, 'F');
     doc.setFont('helvetica', 'bold');
-    doc.setFontSize(8);
-    doc.setTextColor(248, 250, 252);
+    doc.setFontSize(7.8);
+    doc.setTextColor(255, 255, 255);
   } else {
-    if (highlightWarn) {
-      doc.setFillColor(254, 243, 199);
-      doc.rect(x, y, colWidths.reduce((a, b) => a + b, 0), rowHeight, 'F');
-    }
     doc.setDrawColor(203, 213, 225);
     doc.setLineWidth(0.2);
     doc.line(x, y + rowHeight, x + colWidths.reduce((a, b) => a + b, 0), y + rowHeight);
     doc.setFont('helvetica', 'normal');
-    doc.setFontSize(7.5);
+    doc.setFontSize(7.4);
     doc.setTextColor(15, 23, 42);
   }
 
@@ -534,8 +594,108 @@ function drawTableRow(
     const txt = pdfSafe(cells[i]);
     const fitted = doc.splitTextToSize(txt, Math.max(8, w - 3));
     const line = Array.isArray(fitted) ? fitted[0] : String(fitted);
-    doc.text(line || '', curX + 1.5, y + rowHeight * 0.65);
+    doc.text(line || '', curX + 1.5, y + rowHeight * 0.66);
     curX += w;
+  }
+}
+
+/**
+ * Zeichnet eine blau-weisse Ader (0 V DC Standard: blaue Basislinie mit weissen Unterbrechungen).
+ */
+function drawBlueWhiteWire(
+  doc: jsPDF,
+  x1: number,
+  y1: number,
+  x2: number,
+  y2: number,
+  width = 0.52
+): void {
+  doc.setDrawColor(29, 78, 216);
+  doc.setLineWidth(width);
+  doc.setLineDashPattern([], 0);
+  doc.line(x1, y1, x2, y2);
+
+  doc.setDrawColor(255, 255, 255);
+  doc.setLineWidth(Math.max(0.24, width * 0.55));
+  doc.setLineDashPattern([1.6, 1.6], 0);
+  doc.line(x1, y1, x2, y2);
+  doc.setLineDashPattern([], 0);
+}
+
+/**
+ * Zeichnet ein normnahes IEC/EPLAN Kontakt-Symbol auf x=cx zwischen yTop..yBot (ca. y=42..70).
+ */
+function drawContactSymbol(
+  doc: jsPDF,
+  cx: number,
+  yTop: number,
+  yBot: number,
+  upstream: UpstreamContactInfo,
+  contactRefText?: string
+): void {
+  const yMid1 = yTop + 6;
+  const yMid2 = yBot - 6;
+
+  // Permanente +24V Verbindung (ohne Schaltkontakt -> durchgehende blaue Leitung!)
+  if (upstream.kind === 'permanent') {
+    doc.setDrawColor(29, 78, 216);
+    doc.setLineWidth(0.45);
+    doc.line(cx, yTop, cx, yBot);
+    return;
+  }
+
+  if (upstream.kind === 'open') {
+    doc.setDrawColor(148, 163, 184);
+    doc.setLineDashPattern([1.5, 1.5], 0);
+    doc.line(cx, yTop, cx, yBot);
+    doc.setLineDashPattern([], 0);
+    doc.setFont('courier', 'normal');
+    doc.setFontSize(6);
+    doc.setTextColor(148, 163, 184);
+    doc.text('(offen)', cx + 2, (yTop + yBot) / 2);
+    return;
+  }
+
+  doc.setDrawColor(15, 23, 42);
+  doc.setLineWidth(0.42);
+  doc.line(cx, yTop, cx, yMid1);
+  doc.line(cx, yMid2, cx, yBot);
+
+  if (upstream.kind === 'relay_nc' || upstream.kind === 'changeover_nc') {
+    // Oeffner (NC): horizontaler Anschlagbalken rechts an yMid1, schraege Fahne beruehrt ihn
+    doc.line(cx, yMid1, cx + 3.2, yMid1);
+    doc.line(cx + 2.6, yMid1 - 0.8, cx, yMid2);
+  } else {
+    // Schliesser (NO): schraege Fahne links offen
+    doc.line(cx - 4.2, yMid1 + 0.5, cx, yMid2);
+  }
+
+  // Bei Hand-Schalter zusaetzliche Betaetigungs-Linie
+  if (upstream.kind === 'switch_no' || upstream.kind.startsWith('changeover')) {
+    doc.setLineWidth(0.25);
+    doc.setLineDashPattern([1.2, 1.2], 0);
+    doc.line(cx - 6, (yMid1 + yMid2) / 2, cx - 2.1, (yMid1 + yMid2) / 2);
+    doc.setLineDashPattern([], 0);
+    doc.line(cx - 6, (yMid1 + yMid2) / 2 - 2.2, cx - 6, (yMid1 + yMid2) / 2 + 2.2);
+  }
+
+  // Klemmennummern (links am Kontakt, gut lesbar)
+  doc.setFont('courier', 'normal');
+  doc.setFontSize(6.5);
+  doc.setTextColor(51, 65, 85);
+  doc.text(pdfSafe(upstream.topTerm), cx - 5.5, yMid1 - 0.5, { align: 'right' });
+  doc.text(pdfSafe(upstream.botTerm), cx - 5.5, yMid2 + 2, { align: 'right' });
+
+  // BMK des Kontakts (rechts neben Kontakt) + roter Querverweis (wie im Referenz-PDF)
+  doc.setFont('courier', 'bold');
+  doc.setFontSize(7.2);
+  doc.setTextColor(15, 23, 42);
+  doc.text(pdfSafe(upstream.contactBmk), cx + 3.8, yMid1 + 3);
+  if (contactRefText) {
+    doc.setFont('courier', 'normal');
+    doc.setFontSize(6.5);
+    doc.setTextColor(220, 38, 38);
+    doc.text(pdfSafe(contactRefText), cx + 3.8, yMid2 + 0.5);
   }
 }
 
@@ -547,8 +707,8 @@ export function generateCircuitPdf(
   const hasAnySection =
     options.includeCoverAndBom ||
     options.includeElectrical ||
-    options.includeWiringAndTerminals ||
-    options.includeFluidAndAir;
+    options.includeFluidAndAir ||
+    Boolean(options.includeTerminalPlan);
   if (!hasAnySection) return;
 
   const doc = new jsPDF({
@@ -562,30 +722,17 @@ export function generateCircuitPdf(
   const compMap = new Map(circuit.components.map((c) => [c.id, c]));
   const bmkMap = buildBmkEntries(circuit.components);
 
-  // Normalisierte Verbindungen + Plausibilitaetspruefung
-  const warnings: string[] = [];
+  // Verbindungen normalisieren (legacy a2 -> +24V im Plan sauber herausfiltern, da A2 immer 0V ist!)
   const validConnections: NormalizedConnection[] = [];
-
   for (const conn of circuit.connections) {
     const fc = compMap.get(conn.fromComponentId);
     const tc = compMap.get(conn.toComponentId);
     if (!fc || !tc) continue;
-
     const fp = normalizePortId(fc.type, conn.fromPortId);
     const tp = normalizePortId(tc.type, conn.toPortId);
-
-    // Pruefe Legacy-"a2" an +24V-Potentialverteiler oder Ausgang
     if (conn.domain === 'electrical' && (tp === 'a2' || fp === 'a2')) {
-      const targetComp = tp === 'a2' ? tc : fc;
-      const otherComp = tp === 'a2' ? fc : tc;
-      const tBmk = bmkMap.get(targetComp.id)?.bmk ?? targetComp.label;
-      const oBmk = bmkMap.get(otherComp.id)?.bmk ?? otherComp.label;
-      warnings.push(
-        `Korrektur A2: Im Simulations-JSON war ${tBmk} (${targetComp.label}) Klemme A2 an ${oBmk} (+24V) verdrahtet. Im Anlagenbau-PDF wurde A2 sicher auf 0V (GND) gelegt!`
-      );
       continue;
     }
-
     validConnections.push({
       id: conn.id,
       domain: conn.domain,
@@ -597,7 +744,7 @@ export function generateCircuitPdf(
     });
   }
 
-  // Luftpumpen prüfen: Bei external_24v entsteht ein reales Koppelrelais (-KA_AP)
+  // Luftpumpen & automatische Koppelrelais (bei external_24v)
   const airPumps = circuit.components.filter((c) => c.type === 'air_pump');
   const couplingRelays: CouplingRelayVirtual[] = [];
   let kaIdx =
@@ -607,344 +754,302 @@ export function generateCircuitPdf(
     const pMode = String(ap.params?.powerMode ?? 'ac_230v_direct');
     const apBmk = bmkMap.get(ap.id)?.bmk ?? 'AP';
     if (pMode === 'external_24v') {
-      const incoming24v = validConnections.find(
+      const incoming = validConnections.find(
         (c) =>
           c.domain === 'electrical' &&
-          (c.toCompId === ap.id || c.fromCompId === ap.id) &&
-          (c.toPortId === 'a1' || c.fromPortId === 'a1')
+          ((c.toCompId === ap.id && c.toPortId === 'a1') ||
+            (c.fromCompId === ap.id && c.fromPortId === 'a1'))
       );
-      let triggerText = '+24V Steuersignal (offen / noch anschliessen)';
-      if (incoming24v) {
-        const srcId =
-          incoming24v.toCompId === ap.id
-            ? incoming24v.fromCompId
-            : incoming24v.toCompId;
-        const srcPort =
-          incoming24v.toCompId === ap.id
-            ? incoming24v.fromPortId
-            : incoming24v.toPortId;
-        const sc = compMap.get(srcId);
-        const sb = bmkMap.get(srcId)?.bmk ?? '?';
-        triggerText = `${sb}:${formatPortLabel(sc?.type ?? '', srcPort)}`;
+      let triggerCompId: string | undefined;
+      let triggerPortId: string | undefined;
+      let triggerLabel = 'offen';
+      if (incoming) {
+        const isTo = incoming.toCompId === ap.id;
+        triggerCompId = isTo ? incoming.fromCompId : incoming.toCompId;
+        triggerPortId = isTo ? incoming.fromPortId : incoming.toPortId;
+        const sc = compMap.get(triggerCompId);
+        const sb = bmkMap.get(triggerCompId)?.bmk ?? '?';
+        triggerLabel = `${sb}:${formatPortLabel(sc?.type ?? '', triggerPortId)}`;
       }
       couplingRelays.push({
         bmk: `-KA${kaIdx++}`,
-        label: `Koppelrelais 24V->230V (${apBmk})`,
+        label: `Koppelrelais (${apBmk})`,
         airPumpId: ap.id,
         airPumpBmk: apBmk,
         airPumpLabel: ap.label,
-        triggerSourceText: triggerText,
+        triggerCompId,
+        triggerPortId,
+        triggerLabel,
       });
-    } else if (
-      pMode === 'ac_230v_direct' &&
-      !circuit.components.some((c) => c.type === 'power_230v')
-    ) {
-      warnings.push(
-        `Hinweis 230V: Luftpumpe ${apBmk} (${ap.label}) steht auf 230V Direktanschluss, es ist jedoch kein Q1 230V-Block auf der Arbeitsflaeche platziert. Im Schaltplan wird 230V L/N/PE bauseits vorgesehen.`
-      );
     }
   }
 
-  // Synthetische 0V-Sammelschiene (-X0) & Verdrahtungs-Checkliste erzeugen
-  const wireList: WireChecklistItem[] = [];
-  let wireNr = 1;
-
-  // 1) Reale Verbindungen aus der Simulation
-  for (const cn of validConnections) {
-    if (cn.domain !== 'electrical' && cn.domain !== 'analog') continue;
-    const fc = compMap.get(cn.fromCompId)!;
-    const tc = compMap.get(cn.toCompId)!;
-    const fb = bmkMap.get(fc.id)?.bmk ?? fc.label;
-    const tb = bmkMap.get(tc.id)?.bmk ?? tc.label;
-    const is230v =
-      fc.type === 'power_230v' ||
-      cn.fromPortId === 'l_230v' ||
-      cn.toPortId === 'l_230v';
-
-    // Falls Luftpumpe im 24V Koppelrelais-Modus an a1 haengt -> geht im Schaltschrank auf Koppelrelais Spule A1
-    const kr = couplingRelays.find(
-      (k) => k.airPumpId === tc.id && cn.toPortId === 'a1'
+  // =========================================================================
+  // HILFSFUNKTION: Rueckwaerts-Tracer fuer reale Schaltkontakte vor einer Spule
+  // =========================================================================
+  const resolveUpstreamForTargetPort = (
+    compId: string,
+    portIds: string[]
+  ): UpstreamContactInfo => {
+    // Suche direkte elektrische Verbindung zu einem der Zielports
+    const direct = validConnections.find(
+      (cn) =>
+        cn.domain === 'electrical' &&
+        !cn.isSelfBridge &&
+        ((cn.toCompId === compId && portIds.includes(cn.toPortId)) ||
+          (cn.fromCompId === compId && portIds.includes(cn.fromPortId)))
     );
 
-    wireList.push({
-      nr: wireNr++,
-      fromBmk: fb,
-      fromPort: formatPortLabel(fc.type, cn.fromPortId),
-      toBmk: kr ? kr.bmk : tb,
-      toPort: kr ? 'A1 (+)' : formatPortLabel(tc.type, cn.toPortId),
-      potential:
-        cn.domain === 'analog'
-          ? '4-20mA / 0-10V'
-          : is230v
-          ? '230V AC Phase (L)'
-          : '+24V DC',
-      colorSpec:
-        cn.domain === 'analog'
-          ? 'LiYCY 2x0.5 (WS/BN)'
-          : is230v
-          ? 'H07V-K 1.5 mm2 Braun'
-          : cn.isSelfBridge
-          ? 'H07V-K 0.75 mm2 Rot (Bruecke)'
-          : 'H07V-K 0.75 mm2 Rot',
-      note: cn.isSelfBridge
-        ? 'Direkte Drahtbruecke am Bauteil'
-        : kr
-        ? `Steuert Koppelrelais fuer ${tb}`
-        : '',
-      isSynthesized: false,
-    });
-  }
+    if (!direct) {
+      return {
+        kind: 'open',
+        contactBmk: '',
+        topTerm: '',
+        botTerm: '',
+        terminalTag: '',
+      };
+    }
 
-  // 2) Synthetische 230V AC Netz- & 0V/N/PE Rueckleiter fuer echten Anlagenbau
-  const psu24s = circuit.components.filter((c) => c.type === 'power_24v');
-  const psu230s = circuit.components.filter((c) => c.type === 'power_230v');
+    const srcId = direct.toCompId === compId ? direct.fromCompId : direct.toCompId;
+    const srcPort = direct.toCompId === compId ? direct.fromPortId : direct.toPortId;
+    const srcComp = compMap.get(srcId);
+    const srcBmk = bmkMap.get(srcId)?.bmk ?? '';
 
-  for (const g of psu24s) {
-    const gb = bmkMap.get(g.id)?.bmk ?? '-G1';
-    wireList.push(
-      {
-        nr: wireNr++,
-        fromBmk: 'Netzeinspeisung',
-        fromPort: 'L1 (230V~)',
-        toBmk: gb,
-        toPort: 'L (AC IN)',
-        potential: '230V AC Phase (L)',
-        colorSpec: 'H07V-K 1.5 mm2 Braun',
-        note: 'Primaerversorgung 24V-Netzteil (ueber LS B6/B10)',
-        isSynthesized: true,
-      },
-      {
-        nr: wireNr++,
-        fromBmk: 'Netzeinspeisung',
-        fromPort: 'N',
-        toBmk: gb,
-        toPort: 'N (AC IN)',
-        potential: '230V Neutralleiter (N)',
-        colorSpec: 'H07V-K 1.5 mm2 Blau',
-        note: 'Primaer-Neutralleiter',
-        isSynthesized: true,
-      },
-      {
-        nr: wireNr++,
-        fromBmk: 'PE-Schiene',
-        fromPort: 'PE',
-        toBmk: gb,
-        toPort: 'PE',
-        potential: 'Schutzleiter PE',
-        colorSpec: 'H07V-K 1.5 mm2 Gruen/Gelb',
-        note: 'Schutzerdung Netzteilgehaeuse',
-        isSynthesized: true,
-      },
-      {
-        nr: wireNr++,
-        fromBmk: gb,
-        fromPort: '0V (-DC)',
-        toBmk: '-X0',
-        toPort: '0V-Sammelschiene',
-        potential: '0V DC (GND / Masse)',
-        colorSpec: 'H07V-K 1.0 mm2 Dunkelblau',
-        note: 'Zentrale 0V-Masseverteilung (SELV)',
-        isSynthesized: true,
+    if (!srcComp) {
+      return { kind: 'open', contactBmk: '', topTerm: '', botTerm: '', terminalTag: '' };
+    }
+
+    // 1. Direkt von Klemmblock -X1 oder Netzteil -G1 -> permanentes +24V (durchgehend gezeichnet!)
+    if (srcComp.type === 'terminal_block') {
+      const klNr = srcPort.startsWith('out_') ? srcPort.slice(4) : srcPort;
+      return {
+        kind: 'permanent',
+        contactBmk: srcBmk,
+        contactCompId: srcId,
+        topTerm: '',
+        botTerm: '',
+        terminalTag: `${srcBmk}:${klNr}`,
+      };
+    }
+    if (srcComp.type === 'power_24v') {
+      return {
+        kind: 'permanent',
+        contactBmk: srcBmk,
+        contactCompId: srcId,
+        topTerm: '',
+        botTerm: '',
+        terminalTag: '+24V',
+      };
+    }
+
+    // Finde optionale Klemmblock-Klemme hinter dem COM des Kontakts (inkl. Selbst-Bruecken wie com_15 <-> a1 oder com_11 <-> com_21)
+    const findTerminalUpstream = (
+      cId: string,
+      entryPorts: string[],
+      visited = new Set<string>(),
+      depth = 0
+    ): string => {
+      if (depth > 4) return '';
+      const queue = [...entryPorts];
+      const reachablePorts = new Set<string>(entryPorts);
+
+      while (queue.length > 0) {
+        const p = queue.shift()!;
+        for (const cn of validConnections) {
+          if (cn.domain !== 'electrical' || !cn.isSelfBridge) continue;
+          if (cn.fromCompId === cId && cn.fromPortId === p && !reachablePorts.has(cn.toPortId)) {
+            reachablePorts.add(cn.toPortId);
+            queue.push(cn.toPortId);
+          } else if (cn.toCompId === cId && cn.toPortId === p && !reachablePorts.has(cn.fromPortId)) {
+            reachablePorts.add(cn.fromPortId);
+            queue.push(cn.fromPortId);
+          }
+        }
       }
-    );
-  }
 
-  for (const q of psu230s) {
-    const qb = bmkMap.get(q.id)?.bmk ?? '-Q1';
-    wireList.push(
-      {
-        nr: wireNr++,
-        fromBmk: 'Netzeinspeisung',
-        fromPort: 'N',
-        toBmk: qb,
-        toPort: 'N-Klemme',
-        potential: '230V Neutralleiter (N)',
-        colorSpec: 'H07V-K 1.5 mm2 Blau',
-        note: 'Durchfuehrung fuer 230V-Verbraucher',
-        isSynthesized: true,
-      },
-      {
-        nr: wireNr++,
-        fromBmk: 'PE-Schiene',
-        fromPort: 'PE',
-        toBmk: qb,
-        toPort: 'PE-Klemme',
-        potential: 'Schutzleiter PE',
-        colorSpec: 'H07V-K 1.5 mm2 Gruen/Gelb',
-        note: 'Schutzleiter fuer 230V-Verbraucher',
-        isSynthesized: true,
+      for (const p of reachablePorts) {
+        const key = `${cId}:${p}`;
+        if (visited.has(key)) continue;
+        visited.add(key);
+
+        const inc = validConnections.find(
+          (cn) =>
+            cn.domain === 'electrical' &&
+            !cn.isSelfBridge &&
+            ((cn.toCompId === cId && cn.toPortId === p) ||
+              (cn.fromCompId === cId && cn.fromPortId === p))
+        );
+        if (!inc) continue;
+
+        const upId = inc.toCompId === cId ? inc.fromCompId : inc.toCompId;
+        const upPort = inc.toCompId === cId ? inc.fromPortId : inc.toPortId;
+        const upComp = compMap.get(upId);
+        const upBmk = bmkMap.get(upId)?.bmk ?? '';
+        if (upComp?.type === 'terminal_block') {
+          const kl = upPort.startsWith('out_') ? upPort.slice(4) : upPort;
+          return `${upBmk}:${kl}`;
+        }
+        if (upComp?.type === 'power_24v') return '+24V';
+        const nested = findTerminalUpstream(
+          upId,
+          ['in', 'com', 'com_15', 'com_11', 'com_21', 'a1'],
+          visited,
+          depth + 1
+        );
+        if (nested) return nested;
       }
-    );
-  }
+      return '';
+    };
 
-  // Alle 24V-Verbraucher mit realer 0V (GND) Rueckleitung
-  const ZERO_V_TYPES = new Set([
-    'timer_relay',
-    'contactor_relay',
-    'valve_32',
-    'valve_22',
-    'drain_consumer',
-    'indicator_green',
-    'indicator_red',
-    'generator',
-    'dosing_pump',
-    'signal_transmitter',
-    'current_transformer',
-    'logic_and',
-    'logic_or',
-    'logic_not',
-  ]);
-  for (const comp of circuit.components) {
-    if (!ZERO_V_TYPES.has(comp.type)) continue;
-    const bmk = bmkMap.get(comp.id)?.bmk ?? comp.label;
-    const termName =
-      comp.type === 'timer_relay' ||
-      comp.type === 'contactor_relay' ||
-      comp.type === 'valve_32' ||
-      comp.type === 'valve_22'
-        ? 'A2 (0V)'
-        : comp.type.startsWith('indicator')
-        ? 'X2 (0V)'
-        : '0V (GND)';
+    const seedPorts =
+      srcComp.type === 'timer_relay'
+        ? ['com_15']
+        : srcComp.type === 'contactor_relay'
+        ? srcPort.endsWith('22') || srcPort.endsWith('24')
+          ? ['com_21']
+          : ['com_11']
+        : srcComp.type === 'switch'
+        ? ['in']
+        : srcComp.type === 'changeover_switch'
+        ? ['com']
+        : ['in', 'com', 'a1'];
 
-    wireList.push({
-      nr: wireNr++,
-      fromBmk: bmk,
-      fromPort: termName,
-      toBmk: '-X0',
-      toPort: '0V-Sammelschiene',
-      potential: '0V DC (GND)',
-      colorSpec: 'H07V-K 0.75 mm2 Dunkelblau',
-      note: 'Pflicht-Rueckleiter fuer Schaltfunktion',
-      isSynthesized: true,
-    });
-  }
+    const termTag = findTerminalUpstream(srcId, seedPorts);
 
-  // Koppelrelais 0V + 230V Lastkreis + N/PE aller Luftpumpen
-  for (const kr of couplingRelays) {
-    wireList.push(
-      {
-        nr: wireNr++,
-        fromBmk: kr.bmk,
-        fromPort: 'A2 (0V)',
-        toBmk: '-X0',
-        toPort: '0V-Sammelschiene',
-        potential: '0V DC (GND)',
-        colorSpec: 'H07V-K 0.75 mm2 Dunkelblau',
-        note: 'Spulen-Rueckleiter Koppelrelais',
-        isSynthesized: true,
-      },
-      {
-        nr: wireNr++,
-        fromBmk: psu230s[0] ? bmkMap.get(psu230s[0].id)!.bmk : '230V-Netz',
-        fromPort: 'L (230V~)',
-        toBmk: kr.bmk,
-        toPort: '11 (COM 230V)',
-        potential: '230V AC Phase (L)',
-        colorSpec: 'H07V-K 1.5 mm2 Braun',
-        note: 'Lastphase auf Koppelrelais-Schliesser',
-        isSynthesized: true,
-      },
-      {
-        nr: wireNr++,
-        fromBmk: kr.bmk,
-        fromPort: '14 (NO 230V)',
-        toBmk: kr.airPumpBmk,
-        toPort: 'L (230V~)',
-        potential: '230V AC geschaltet (L\')',
-        colorSpec: 'H07V-K 1.5 mm2 Schwarz/Braun',
-        note: 'Geschaltete Phase zur Luftpumpe',
-        isSynthesized: true,
+    // 2. Zeitrelais-Kontakte (15-16 NC / 15-18 NO)
+    if (srcComp.type === 'timer_relay') {
+      if (srcPort === 'nc_16') {
+        return {
+          kind: 'relay_nc',
+          contactBmk: srcBmk,
+          contactCompId: srcId,
+          topTerm: '15',
+          botTerm: '16',
+          terminalTag: termTag,
+        };
       }
-    );
-  }
-
-  for (const ap of airPumps) {
-    const ab = bmkMap.get(ap.id)?.bmk ?? 'AP';
-    const src230 = psu230s[0] ? bmkMap.get(psu230s[0].id)!.bmk : '230V-Netz';
-    wireList.push(
-      {
-        nr: wireNr++,
-        fromBmk: ab,
-        fromPort: 'N',
-        toBmk: src230,
-        toPort: 'N-Klemme',
-        potential: '230V Neutralleiter (N)',
-        colorSpec: 'H07V-K 1.5 mm2 Blau',
-        note: '230V Betriebsstromkreis Luftpumpe',
-        isSynthesized: true,
-      },
-      {
-        nr: wireNr++,
-        fromBmk: ab,
-        fromPort: 'PE',
-        toBmk: src230,
-        toPort: 'PE-Klemme',
-        potential: 'Schutzleiter PE',
-        colorSpec: 'H07V-K 1.5 mm2 Gruen/Gelb',
-        note: 'Schutzleiter Luftpumpe',
-        isSynthesized: true,
-      }
-    );
-  }
-
-  // Strompfade fuer Normnahen Stromlaufplan aufbauen
-  const consumerTypesForPaths = new Set([
-    'timer_relay',
-    'contactor_relay',
-    'valve_32',
-    'valve_22',
-    'indicator_green',
-    'indicator_red',
-    'drain_consumer',
-    'generator',
-    'dosing_pump',
-    'signal_transmitter',
-    'current_transformer',
-    'logic_and',
-    'logic_or',
-    'logic_not',
-  ]);
-
-  const currentPaths: CurrentPathItem[] = [];
-  const compToPathNr = new Map<string, number>();
-
-  const consumerComps = [...circuit.components]
-    .filter((c) => consumerTypesForPaths.has(c.type))
-    .sort((a, b) => a.y - b.y || a.x - b.x);
-
-  // Erste Zuordnung der Pfadnummern
-  let nextPathNr = 2; // Pfad 1 = 230V/24V Versorgung auf Blatt 1
-  for (const c of consumerComps) {
-    compToPathNr.set(c.id, nextPathNr++);
-  }
-  const krToPathNr = new Map<string, number>();
-  for (const kr of couplingRelays) {
-    krToPathNr.set(kr.bmk, nextPathNr++);
-  }
-
-  const findFeedersForPort = (compId: string, portIds: string[]): string[] => {
-    const res: string[] = [];
-    for (const cn of validConnections) {
-      if (cn.domain !== 'electrical') continue;
-      if (cn.toCompId === compId && portIds.includes(cn.toPortId)) {
-        const sc = compMap.get(cn.fromCompId);
-        const sb = bmkMap.get(cn.fromCompId)?.bmk ?? sc?.label ?? '?';
-        res.push(`${sb}:${formatPortLabel(sc?.type ?? '', cn.fromPortId)}`);
-      } else if (cn.fromCompId === compId && portIds.includes(cn.fromPortId)) {
-        const dc = compMap.get(cn.toCompId);
-        const db = bmkMap.get(cn.toCompId)?.bmk ?? dc?.label ?? '?';
-        res.push(`${db}:${formatPortLabel(dc?.type ?? '', cn.toPortId)}`);
+      if (srcPort === 'no_18') {
+        return {
+          kind: 'relay_no',
+          contactBmk: srcBmk,
+          contactCompId: srcId,
+          topTerm: '15',
+          botTerm: '18',
+          terminalTag: termTag,
+        };
       }
     }
-    return res;
+
+    // 3. Hilfsrelais-Kontakte (11-12/14 & 21-22/24)
+    if (srcComp.type === 'contactor_relay') {
+      if (srcPort === 'nc_12') {
+        return {
+          kind: 'relay_nc',
+          contactBmk: srcBmk,
+          contactCompId: srcId,
+          topTerm: '11',
+          botTerm: '12',
+          terminalTag: termTag,
+        };
+      }
+      if (srcPort === 'no_14') {
+        return {
+          kind: 'relay_no',
+          contactBmk: srcBmk,
+          contactCompId: srcId,
+          topTerm: '11',
+          botTerm: '14',
+          terminalTag: termTag,
+        };
+      }
+      if (srcPort === 'nc_22') {
+        return {
+          kind: 'relay_nc',
+          contactBmk: srcBmk,
+          contactCompId: srcId,
+          topTerm: '21',
+          botTerm: '22',
+          terminalTag: termTag,
+        };
+      }
+      if (srcPort === 'no_24') {
+        return {
+          kind: 'relay_no',
+          contactBmk: srcBmk,
+          contactCompId: srcId,
+          topTerm: '21',
+          botTerm: '24',
+          terminalTag: termTag,
+        };
+      }
+    }
+
+    // 4. Schalter & Wechselschalter
+    if (srcComp.type === 'switch') {
+      return {
+        kind: 'switch_no',
+        contactBmk: srcBmk,
+        contactCompId: srcId,
+        topTerm: '13',
+        botTerm: '14',
+        terminalTag: termTag,
+      };
+    }
+    if (srcComp.type === 'changeover_switch') {
+      return {
+        kind: srcPort === 'nc' ? 'changeover_nc' : 'changeover_no',
+        contactBmk: srcBmk,
+        contactCompId: srcId,
+        topTerm: '11',
+        botTerm: srcPort === 'nc' ? '12' : '14',
+        terminalTag: termTag,
+      };
+    }
+
+    // Fallback: permanenter Abgriff von anderer Quelle (z. B. Bruecke oder Sensorausgang)
+    return {
+      kind: 'permanent',
+      contactBmk: srcBmk,
+      contactCompId: srcId,
+      topTerm: '',
+      botTerm: '',
+      terminalTag: `${srcBmk}:${formatPortLabel(srcComp.type, srcPort)}`,
+    };
   };
 
+  // =========================================================================
+  // SPALTENPLANUNG FUER STROMLAUFPLAN (10 EPLAN-Spalten 0..9 je Blatt)
+  // =========================================================================
+  const consumerTypes = new Set([
+    'timer_relay',
+    'contactor_relay',
+    'valve_32',
+    'valve_22',
+    'indicator_green',
+    'indicator_red',
+    'drain_consumer',
+    'generator',
+    'dosing_pump',
+    'signal_transmitter',
+    'current_transformer',
+    'logic_and',
+    'logic_or',
+    'logic_not',
+  ]);
+
+  const consumerComps = [...circuit.components]
+    .filter((c) => consumerTypes.has(c.type))
+    .sort((a, b) => a.y - b.y || a.x - b.x);
+
+  const rawCols: Omit<SchematicColumnSpec, 'sheetNr' | 'colNr' | 'refCode'>[] = [];
+
   for (const c of consumerComps) {
-    const pNr = compToPathNr.get(c.id)!;
     const bmk = bmkMap.get(c.id)?.bmk ?? c.label;
-    const targetCoilPorts =
-      c.type === 'timer_relay' || c.type === 'contactor_relay' || c.type === 'valve_32' || c.type === 'valve_22'
+    const targetPorts =
+      c.type === 'timer_relay' ||
+      c.type === 'contactor_relay' ||
+      c.type === 'valve_32' ||
+      c.type === 'valve_22'
         ? ['a1']
         : c.type === 'generator'
         ? ['max_in', 'v24_in', 'min_in']
@@ -954,54 +1059,42 @@ export function generateCircuitPdf(
         ? ['i1', 'i2']
         : ['in', 'v24_in', 'pulse_in'];
 
-    const feeders = findFeedersForPort(c.id, targetCoilPorts);
-    const b1Feeders = c.type === 'timer_relay' ? findFeedersForPort(c.id, ['b1']) : [];
+    const upstream = resolveUpstreamForTargetPort(c.id, targetPorts);
 
-    // Kontaktspiegel bei Relais aufbauen
-    const mirrorEntries: CurrentPathItem['mirrorEntries'] = [];
-    if (c.type === 'timer_relay' || c.type === 'contactor_relay') {
-      const contactPorts =
-        c.type === 'timer_relay'
-          ? [
-              { id: 'nc_16', label: '15-16', kind: 'NC' as const },
-              { id: 'no_18', label: '15-18', kind: 'NO' as const },
-            ]
-          : [
-              { id: 'nc_12', label: '11-12', kind: 'NC' as const },
-              { id: 'no_14', label: '11-14', kind: 'NO' as const },
-              { id: 'nc_22', label: '21-22', kind: 'NC' as const },
-              { id: 'no_24', label: '21-24', kind: 'NO' as const },
-            ];
-
-      for (const cp of contactPorts) {
-        const targets = validConnections
-          .filter((cn) => cn.fromCompId === c.id && cn.fromPortId === cp.id)
-          .map((cn) => {
-            const tb = bmkMap.get(cn.toCompId)?.bmk ?? '?';
-            const tPath = compToPathNr.get(cn.toCompId);
-            const tLabel = `${tb}:${formatPortLabel(compMap.get(cn.toCompId)?.type ?? '', cn.toPortId)}`;
-            return tPath ? `${tLabel} (Pf.${tPath})` : tLabel;
-          });
-        if (targets.length > 0) {
-          mirrorEntries.push({
-            term: cp.label,
-            kind: cp.kind,
-            targetPathText: targets.join(', '),
-          });
-        }
+    // Falls Zeitrelais einen angeschlossenen B1-Steuerkontakt hat,
+    // zeichne dessen vorgelagerten Schaltkontakt direkt in die linke Nachbarspalte!
+    if (c.type === 'timer_relay') {
+      const b1Up = resolveUpstreamForTargetPort(c.id, ['b1']);
+      if (b1Up.kind !== 'open') {
+        rawCols.push({
+          id: `${c.id}_b1`,
+          kind: 'b1_trigger',
+          title: `Steuerkontakt ${bmk}`,
+          modeLine: `-> B1 (${bmk})`,
+          bmk: b1Up.contactBmk || 'B1',
+          symbolType: 'b1_branch',
+          topTerm: '',
+          botTerm: '',
+          upstream: b1Up,
+          targetDeviceId: c.id,
+          mirrorRefs: [],
+        });
       }
     }
 
-    currentPaths.push({
-      pathNr: pNr,
+    const modeLine =
+      c.type === 'timer_relay'
+        ? `${String(c.params?.teleFunction ?? 'E')} / ${formatTeleDuration(getTimerTargetSeconds(c))}`
+        : bmkMap.get(c.id)?.settingSummary ?? '';
+
+    rawCols.push({
+      id: c.id,
+      compId: c.id,
+      kind: 'device',
       title: c.label,
-      feederText: feeders[0] ?? 'Manuell / offen',
-      contactsText: feeders.slice(0, 2),
-      b1Text: b1Feeders[0],
-      coilBmk: bmk,
-      coilTopTerm: c.type.startsWith('indicator') ? 'X1' : 'A1',
-      coilBottomTerm: c.type.startsWith('indicator') ? 'X2 (0V)' : 'A2 (0V)',
-      coilKind:
+      modeLine,
+      bmk,
+      symbolType:
         c.type === 'timer_relay'
           ? 'timer'
           : c.type === 'contactor_relay'
@@ -1019,180 +1112,252 @@ export function generateCircuitPdf(
           : c.type.startsWith('logic_')
           ? 'logic'
           : 'probe',
-      functionCode:
-        c.type === 'timer_relay'
-          ? `${String(c.params?.teleFunction ?? 'E')} (${formatTeleDuration(getTimerTargetSeconds(c))})`
-          : undefined,
-      mirrorEntries,
+      topTerm: c.type.startsWith('indicator') ? 'X1' : 'A1',
+      botTerm: c.type.startsWith('indicator') ? 'X2' : 'A2',
+      upstream,
+      mirrorRefs: [],
     });
   }
 
-  for (const kr of couplingRelays) {
-    currentPaths.push({
-      pathNr: krToPathNr.get(kr.bmk)!,
+  couplingRelays.forEach((kr, krIdx) => {
+    const up: UpstreamContactInfo = kr.triggerCompId
+      ? resolveUpstreamForTargetPort(kr.airPumpId, ['a1'])
+      : { kind: 'open', contactBmk: '', topTerm: '', botTerm: '', terminalTag: '' };
+    rawCols.push({
+      id: `kr_${kr.bmk}`,
+      kind: 'device',
       title: kr.label,
-      feederText: kr.triggerSourceText,
-      contactsText: [kr.triggerSourceText],
-      coilBmk: kr.bmk,
-      coilTopTerm: 'A1',
-      coilBottomTerm: 'A2 (0V)',
-      coilKind: 'contactor',
-      functionCode: '24V->230V',
-      mirrorEntries: [
+      modeLine: '24V -> 230V',
+      bmk: kr.bmk,
+      symbolType: 'contactor',
+      topTerm: 'A1',
+      botTerm: 'A2',
+      upstream: up,
+      mirrorRefs: [
         {
-          term: '11-14',
+          termLabel: '11-14',
           kind: 'NO',
-          targetPathText: `${kr.airPumpBmk}:L (230V Pf.1)`,
+          targetRef: `PWR:${Math.min(9, 4 + krIdx * 2)}`, // wird unten durch exakte Energie-Blattnummer ersetzt
         },
       ],
     });
+  });
+
+  // Paginiere Spalten in 10er Blaetter (0..9), dabei B1-Trigger und dazugehoerigen Timer NIE trennen!
+  const controlSheets: SchematicColumnSpec[][] = [];
+  let currentSheetCols: SchematicColumnSpec[] = [];
+
+  for (let i = 0; i < rawCols.length; i++) {
+    const item = rawCols[i];
+    if (
+      item.kind === 'b1_trigger' &&
+      currentSheetCols.length === 9
+    ) {
+      // B1-Kontakt nicht am Rand von seinem Timer abbrechen -> neues Blatt beginnen
+      controlSheets.push(currentSheetCols);
+      currentSheetCols = [];
+    }
+    if (currentSheetCols.length >= 10) {
+      controlSheets.push(currentSheetCols);
+      currentSheetCols = [];
+    }
+    const sheetIdx = (options.includeCoverAndBom ? 1 : 0) + 1 + controlSheets.length; // vorlaeufig, unten exakt berechnet
+    const colNr = currentSheetCols.length;
+    currentSheetCols.push({
+      ...item,
+      sheetNr: sheetIdx,
+      colNr,
+      refCode: `${sheetIdx}.${colNr}`,
+    });
+  }
+  if (currentSheetCols.length > 0 || (options.includeElectrical && controlSheets.length === 0)) {
+    controlSheets.push(currentSheetCols);
   }
 
-  // Seiten-Planung vorab durchfuehren, um Blatt X / Y exakt auszugeben
+  // Exakte Blattnummern berechnen (Blatt 0 = Deckblatt, Blatt 1 = Energieversorgung, Blatt 2.. = Steuerung, ...)
   const bomEntries = Array.from(bmkMap.values());
-  const bomRowsPerPage = 14;
-  const coverBomPages = options.includeCoverAndBom
-    ? Math.max(1, 1 + Math.ceil(Math.max(0, bomEntries.length - 7) / bomRowsPerPage))
+  const bomExtraPages = options.includeCoverAndBom
+    ? Math.ceil(Math.max(0, bomEntries.length - 8) / 14)
     : 0;
-
-  const pathsPerPage = 7;
-  const elecControlPages = Math.max(1, Math.ceil(currentPaths.length / pathsPerPage));
-  const elecPages = options.includeElectrical ? 1 + elecControlPages : 0;
-
+  const coverSheetCount = options.includeCoverAndBom ? 1 + bomExtraPages : 0;
+  const elecPowerSheetCount = options.includeElectrical ? 1 : 0;
+  const elecCtrlSheetCount = options.includeElectrical ? controlSheets.length : 0;
   const terminalBlockComps = circuit.components.filter((c) => c.type === 'terminal_block');
-  const wiresPerPage = 16;
-  const wiringListPages = Math.max(1, Math.ceil(wireList.length / wiresPerPage));
-  const wiringPages = options.includeWiringAndTerminals
-    ? (terminalBlockComps.length > 0 ? 1 : 0) + wiringListPages
-    : 0;
-
+  const terminalSheetCount =
+    options.includeTerminalPlan && terminalBlockComps.length > 0 ? 1 : 0;
   const fluidAirConns = validConnections.filter(
     (c) => c.domain === 'fluid' || c.domain === 'air'
   );
-  const fluidPages = options.includeFluidAndAir
+  const fluidSheetCount = options.includeFluidAndAir
     ? 1 + (fluidAirConns.length > 0 ? Math.ceil(fluidAirConns.length / 18) : 0)
     : 0;
 
-  const totalPages = coverBomPages + elecPages + wiringPages + fluidPages;
-  let currentPage = 0;
-  let firstPageUsed = false;
+  const totalSheets =
+    coverSheetCount +
+    elecPowerSheetCount +
+    elecCtrlSheetCount +
+    terminalSheetCount +
+    fluidSheetCount;
 
-  const beginNewPage = (sectionTitle: string) => {
-    if (firstPageUsed) {
-      doc.addPage();
+  // Weise allen Steuerungsspalten endgueltige Blatt.Spalte-Codes zu
+  const expectedPwrSheetNr = coverSheetCount + 1;
+  const firstCtrlSheetNr = coverSheetCount + elecPowerSheetCount + 1;
+  const compToRefCode = new Map<string, string>();
+  const couplingCoilRefMap = new Map<string, string>();
+  controlSheets.forEach((cols, sIdx) => {
+    const sNr = firstCtrlSheetNr + sIdx;
+    cols.forEach((col, cIdx) => {
+      col.sheetNr = sNr;
+      col.colNr = cIdx;
+      col.refCode = `${sNr}.${cIdx}`;
+      if (col.compId) {
+        compToRefCode.set(col.compId, col.refCode);
+      }
+      if (col.id.startsWith('kr_')) {
+        couplingCoilRefMap.set(col.bmk, col.refCode);
+      }
+      col.mirrorRefs.forEach((mr) => {
+        if (mr.targetRef.startsWith('PWR:')) {
+          mr.targetRef = `${expectedPwrSheetNr}.${mr.targetRef.slice(4)}`;
+        }
+      });
+    });
+  });
+
+  // Ergaenze B1-Zielverweis + Kontaktspiegel-Querverweise (Blatt.Spalte)
+  const allCtrlCols = controlSheets.flat();
+  for (const col of allCtrlCols) {
+    if (col.kind === 'b1_trigger' && col.targetDeviceId) {
+      col.b1TargetRef = compToRefCode.get(col.targetDeviceId);
     }
-    firstPageUsed = true;
-    currentPage++;
-    drawPageChrome(doc, cleanName, sectionTitle, currentPage, totalPages, dateStr);
+    if (col.compId) {
+      // Wo wird dieser Relais-/Zeitrelais-Kontakt verwendet?
+      const matches = allCtrlCols.filter(
+        (other) => other.upstream.contactCompId === col.compId && other.upstream.kind !== 'permanent'
+      );
+      for (const m of matches) {
+        const isNc =
+          m.upstream.kind === 'relay_nc' || m.upstream.kind === 'changeover_nc';
+        col.mirrorRefs.push({
+          termLabel: `${m.upstream.topTerm}-${m.upstream.botTerm}`,
+          kind: isNc ? 'NC' : 'NO',
+          targetRef: m.refCode,
+        });
+      }
+    }
+  }
+
+  let sheetCursor = 0;
+  let hasStartedDoc = false;
+  const nextPage = (showColumnGrid: boolean, sectionTitle?: string): number => {
+    if (hasStartedDoc) doc.addPage();
+    hasStartedDoc = true;
+    sheetCursor++;
+    drawEplanFrame(
+      doc,
+      cleanName,
+      sheetCursor,
+      totalSheets,
+      dateStr,
+      showColumnGrid,
+      sectionTitle
+    );
+    return sheetCursor;
   };
 
   // =========================================================================
-  // ABSCHNITT 1: DECKBLATT, STUECKLISTE (BOM) & INBETRIEBNAHMEWERTE
+  // BLATT 1: DECKBLATT (ANLAGEN-INFO, ADERFARBEN, KLEMMLEISTEN & STUECKLISTE)
   // =========================================================================
   if (options.includeCoverAndBom) {
-    beginNewPage('1. Deckblatt, Stueckliste & Inbetriebnahme');
+    nextPage(false, 'Deckblatt: Anlagen-Uebersicht, Aderfarben & Stueckliste');
 
-    // Anlagen-Steckbrief
-    doc.setFillColor(248, 250, 252);
-    doc.setDrawColor(203, 213, 225);
-    doc.roundedRect(14, 24, 132, 42, 2, 2, 'FD');
-    doc.setFont('helvetica', 'bold');
-    doc.setFontSize(9.5);
+    // Box links: Anlagentyp & Spannungssystem
+    doc.setDrawColor(0, 128, 85);
+    doc.setLineWidth(0.35);
+    doc.rect(14, 20, 118, 46);
+    doc.setFont('courier', 'bold');
+    doc.setFontSize(9);
     doc.setTextColor(15, 23, 42);
-    doc.text(pdfSafe('Anlagen-Uebersicht & Ausfuehrungshinweise'), 18, 30);
+    doc.text('Anlagentyp / Projekt:', 18, 26);
+    doc.setFont('courier', 'normal');
+    doc.setFontSize(8.5);
+    doc.text(pdfSafe(cleanName), 18, 32);
 
-    doc.setFont('helvetica', 'normal');
+    doc.setFont('courier', 'bold');
+    doc.text('Steuerung / Versorgung:', 18, 41);
+    doc.setFont('courier', 'normal');
     doc.setFontSize(8);
-    doc.setTextColor(51, 65, 85);
-    doc.text(pdfSafe(`Projektname: ${cleanName}`), 18, 36);
+    doc.text('Steuerspannung:   24 V DC / 0 V (SELV)', 18, 47);
+    doc.text('Lastspannung:     230 V AC 50 Hz (L1 / N / PE)', 18, 52.5);
     doc.text(
-      pdfSafe(`Bauteile gesamt: ${circuit.components.length}  |  Verbindungen: ${circuit.connections.length}`),
+      pdfSafe(`Bauteile gesamt:  ${circuit.components.length} Stueck`),
       18,
-      41
-    );
-    doc.text(
-      pdfSafe(
-        `Steuerspannung: 24V DC (SELV) + 0V (GND) Sammelschiene -X0  |  Lastspannung: 230V AC L/N/PE`
-      ),
-      18,
-      46
-    );
-    doc.text(
-      pdfSafe(
-        `Koppelrelais (24V -> 230V): ${couplingRelays.length} Stueck automatisch generiert`
-      ),
-      18,
-      51
-    );
-    doc.text(
-      pdfSafe('Verdrahtungsfarben: +24V Rot | 0V Dunkelblau | 230V L Braun | N Blau | PE Gruen/Gelb'),
-      18,
-      56
-    );
-    doc.text(
-      pdfSafe('Medienfarben (R&I): Anolyt Gelb | Katholyte Gruen | Wasser Dunkelblau | Druckluft Cyan'),
-      18,
-      61
+      58
     );
 
-    // Pruefhinweis-Box (oder Bestaetigung)
-    if (warnings.length > 0) {
-      doc.setFillColor(254, 243, 199);
-      doc.setDrawColor(217, 119, 6);
-    } else {
-      doc.setFillColor(236, 253, 245);
-      doc.setDrawColor(16, 185, 129);
-    }
-    doc.roundedRect(151, 24, 132, 42, 2, 2, 'FD');
-    doc.setFont('helvetica', 'bold');
+    // Box mitte: Aderfarben (wie Referenz-PDF)
+    doc.rect(136, 20, 92, 46);
+    doc.setFont('courier', 'bold');
     doc.setFontSize(9);
-    doc.setTextColor(warnings.length > 0 ? 146 : 6, warnings.length > 0 ? 64 : 95, warnings.length > 0 ? 14 : 70);
-    doc.text(
-      pdfSafe(
-        warnings.length > 0
-          ? `Pruef- & Montagehinweise (${warnings.length})`
-          : 'Plausibilitaetspruefung: OK (Anlagenbau-konform)'
-      ),
-      155,
-      30
-    );
-    doc.setFont('helvetica', 'normal');
-    doc.setFontSize(7.3);
-    doc.setTextColor(30, 41, 59);
-    const noteLines =
-      warnings.length > 0
-        ? warnings
-        : [
-            'Alle Spulen (A1/A2), Ventile, Leuchtmelder und Verbraucher wurden normgerecht mit 0V (GND) Rueckleitern auf -X0 ergaenzt.',
-            'Alle 230V-Betriebsmittel erhalten L, N und Schutzleiter PE nach VDE 0100.',
-          ];
-    let wy = 35.5;
-    for (const n of noteLines.slice(0, 4)) {
-      const wrapped = doc.splitTextToSize(pdfSafe(`- ${n}`), 124);
-      doc.text(wrapped.slice(0, 2), 155, wy);
-      wy += Math.min(2, wrapped.length) * 3.4 + 1.5;
+    doc.text('Aderfarben:', 140, 26);
+    doc.setFont('courier', 'normal');
+    doc.setFontSize(7.6);
+    const colors: Array<[string, string, string]> = [
+      ['Lastspannung', 'L1 (230V~)', 'braun / schwarz'],
+      ['Neutralleiter', 'N', 'hellblau'],
+      ['Schutzleiter', 'PE', 'gruen / gelb'],
+      ['Steuerspannung', '+24 V DC', 'blau'],
+      ['Steuerspannung', '0 V DC', 'blau-weiß'],
+      ['Messleitung', '4-20 mA', 'weiss'],
+    ];
+    let cy = 32;
+    for (const [k, p, col] of colors) {
+      doc.text(pdfSafe(k), 140, cy);
+      doc.text(pdfSafe(p), 174, cy);
+      doc.text(pdfSafe(col), 196, cy);
+      cy += 5.4;
     }
 
-    // Erste 7 BOM-Zeilen auf Seite 1
+    // Box rechts: Klemmleisten
+    doc.rect(232, 20, 51, 46);
+    doc.setFont('courier', 'bold');
+    doc.setFontSize(9);
+    doc.text('Klemmleisten:', 235, 26);
+    doc.setFont('courier', 'normal');
+    doc.setFontSize(7.6);
+    let ky = 32;
+    doc.text('-X20.1   +24 V DC', 235, ky);
+    ky += 5.5;
+    doc.text('-X20.2   0 V DC', 235, ky);
+    ky += 5.5;
+    for (const tb of terminalBlockComps) {
+      const tbBmk = bmkMap.get(tb.id)?.bmk ?? '-X1';
+      doc.text(pdfSafe(`${tbBmk}     +24V Vert.`), 235, ky);
+      ky += 5.5;
+    }
+    if (couplingRelays.length > 0) {
+      doc.text(pdfSafe(`-KA..   ${couplingRelays.length}x Koppelr.`), 235, ky);
+    }
+
+    // Stueckliste direkt darunter (ohne Pruefhinweis-Kasten!)
     doc.setFont('helvetica', 'bold');
     doc.setFontSize(9);
     doc.setTextColor(15, 23, 42);
-    doc.text(pdfSafe('Stueckliste (BOM) & Parametrierung'), 14, 73);
+    doc.text('Stueckliste (BOM) & Inbetriebnahme-Einstellwerte', 14, 73);
 
-    const bomCols = [10, 18, 48, 52, 70, 71];
+    const bomCols = [10, 18, 48, 54, 68, 71];
     drawTableRow(
       doc,
       14,
       76,
       bomCols,
-      ['Pos', 'BMK', 'Bauteil-Typ', 'Bezeichnung', 'Anschluss / Spezifikation', 'Inbetriebnahme-Sollwert'],
+      ['Pos', 'BMK', 'Bauteil-Typ', 'Bezeichnung', 'Anschluss / Spezifikation', 'Einstellwert'],
       7,
       true
     );
 
     let yCursor = 83;
-    const firstSlice = bomEntries.slice(0, 7);
-    firstSlice.forEach((entry, i) => {
+    bomEntries.slice(0, 8).forEach((entry, i) => {
       drawTableRow(
         doc,
         14,
@@ -1206,27 +1371,25 @@ export function generateCircuitPdf(
           entry.specSummary,
           entry.settingSummary,
         ],
-        13.5,
+        11.8,
         false
       );
-      yCursor += 13.5;
+      yCursor += 11.8;
     });
 
-    // Weitere BOM-Seiten falls noetig
-    for (let offset = 7; offset < bomEntries.length; offset += bomRowsPerPage) {
-      beginNewPage('1. Stueckliste (BOM) - Fortsetzung');
+    for (let offset = 8; offset < bomEntries.length; offset += 14) {
+      nextPage(false, 'Stueckliste (BOM) - Fortsetzung');
       drawTableRow(
         doc,
         14,
-        24,
+        22,
         bomCols,
-        ['Pos', 'BMK', 'Bauteil-Typ', 'Bezeichnung', 'Anschluss / Spezifikation', 'Inbetriebnahme-Sollwert'],
+        ['Pos', 'BMK', 'Bauteil-Typ', 'Bezeichnung', 'Anschluss / Spezifikation', 'Einstellwert'],
         7,
         true
       );
-      let yy = 31;
-      const chunk = bomEntries.slice(offset, offset + bomRowsPerPage);
-      chunk.forEach((entry, idx) => {
+      let yy = 29;
+      bomEntries.slice(offset, offset + 14).forEach((entry, idx) => {
         drawTableRow(
           doc,
           14,
@@ -1240,405 +1403,455 @@ export function generateCircuitPdf(
             entry.specSummary,
             entry.settingSummary,
           ],
-          11,
+          10.8,
           false
         );
-        yy += 11;
+        yy += 10.8;
       });
     }
   }
 
   // =========================================================================
-  // ABSCHNITT 2: NORMNAHER STROMLAUFPLAN (230V AC + 24V DC + 0V/N/PE)
+  // STROMLAUFPLAN BLATT 1: ENERGIEVERSORGUNG (230V AC L/N/PE -> 24V DC & PUMPEN)
   // =========================================================================
   if (options.includeElectrical) {
-    // Blatt 2.1: Energieverteilung 230V AC (L/N/PE) -> 24V Netzteil (-G1) & 230V Luftpumpen
-    beginNewPage('2. Stromlaufplan: Energieversorgung 230V AC (L/N/PE) & 24V DC Einspeisung');
+    const pwrSheetNr = nextPage(true, 'Stromlaufplan: Energieversorgung');
+    const psu24s = circuit.components.filter((c) => c.type === 'power_24v');
+    const psu230s = circuit.components.filter((c) => c.type === 'power_230v');
+    const mainSwitch = circuit.components.find((c) => c.type === 'switch');
 
-    // Drei obere Netzschienen L, N, PE
-    const yL = 34;
-    const yN = 41;
-    const yPE = 48;
-    doc.setLineWidth(0.7);
-    doc.setDrawColor(180, 83, 9); // Braun-Orange fuer L
-    doc.line(22, yL, 280, yL);
-    doc.setDrawColor(37, 99, 235); // Blau N
-    doc.line(22, yN, 280, yN);
-    doc.setDrawColor(22, 163, 74); // Gruen/Gelb PE
+    // Obere 230V-Netzschienen
+    const yL = 26;
+    const yN = 32;
+    const yPE = 38;
+    doc.setLineWidth(0.55);
+    doc.setDrawColor(180, 83, 9);
+    doc.line(22, yL, 282, yL);
+    doc.setDrawColor(37, 99, 235);
+    doc.line(22, yN, 282, yN);
+    doc.setDrawColor(22, 163, 74);
     doc.setLineDashPattern([3, 1.5], 0);
-    doc.line(22, yPE, 280, yPE);
+    doc.line(22, yPE, 282, yPE);
     doc.setLineDashPattern([], 0);
 
-    doc.setFont('helvetica', 'bold');
-    doc.setFontSize(8);
+    doc.setFont('courier', 'bold');
+    doc.setFontSize(7.8);
     doc.setTextColor(180, 83, 9);
-    doc.text('L1 (230V~)', 10, yL + 1);
+    doc.text('L1 (230V~)', 12, yL + 1);
     doc.setTextColor(37, 99, 235);
-    doc.text('N', 10, yN + 1);
+    doc.text('N', 12, yN + 1);
     doc.setTextColor(22, 163, 74);
-    doc.text('PE', 10, yPE + 1);
+    doc.text('PE', 12, yPE + 1);
 
-    // Block 1: 24V Netzteil(e)
-    let px = 42;
+    // 24V DC Netzteil(e) in Spalten 0..2
+    let gx = 28;
     for (const g of psu24s) {
       const gb = bmkMap.get(g.id)?.bmk ?? '-G1';
-      // Zuleitung L/N/PE von Schienen runter
-      doc.setLineWidth(0.5);
+      doc.setLineWidth(0.45);
       doc.setDrawColor(180, 83, 9);
-      doc.line(px + 10, yL, px + 10, 84);
-      doc.circle(px + 10, yL, 0.9, 'F');
+      doc.line(gx + 8, yL, gx + 8, 72);
+      doc.circle(gx + 8, yL, 0.8, 'F');
       doc.setDrawColor(37, 99, 235);
-      doc.line(px + 22, yN, px + 22, 84);
-      doc.circle(px + 22, yN, 0.9, 'F');
+      doc.line(gx + 22, yN, gx + 22, 72);
+      doc.circle(gx + 22, yN, 0.8, 'F');
       doc.setDrawColor(22, 163, 74);
-      doc.line(px + 34, yPE, px + 34, 84);
-      doc.circle(px + 34, yPE, 0.9, 'F');
+      doc.line(gx + 36, yPE, gx + 36, 72);
+      doc.circle(gx + 36, yPE, 0.8, 'F');
 
-      // Sicherung F1 Symbol auf L
+      // Sicherung F1
       doc.setFillColor(255, 255, 255);
-      doc.setDrawColor(30, 41, 59);
-      doc.rect(px + 7.5, 62, 5, 10, 'FD');
-      doc.line(px + 10, 62, px + 10, 72);
-      doc.setFontSize(7);
+      doc.setDrawColor(15, 23, 42);
+      doc.rect(gx + 5.5, 50, 5, 9, 'FD');
+      doc.line(gx + 8, 50, gx + 8, 59);
+      doc.setFont('courier', 'normal');
+      doc.setFontSize(6.8);
       doc.setTextColor(15, 23, 42);
-      doc.text('-F1 B6A', px + 14, 68);
+      doc.text('-F1 B6A', gx + 12, 55.5);
 
       // Netzteil Box
       doc.setFillColor(248, 250, 252);
       doc.setDrawColor(15, 23, 42);
-      doc.setLineWidth(0.6);
-      doc.roundedRect(px, 84, 52, 42, 1.5, 1.5, 'FD');
-      doc.setFont('helvetica', 'bold');
-      doc.setFontSize(9);
-      doc.text(pdfSafe(`${gb} 24V DC Netzteil`), px + 26, 95, { align: 'center' });
-      doc.setFont('helvetica', 'normal');
-      doc.setFontSize(7.5);
-      doc.text('230V AC -> 24V DC / 5A', px + 26, 103, { align: 'center' });
-      doc.text('L       N      PE', px + 22, 89, { align: 'center' });
-      doc.text('+24V            0V (GND)', px + 26, 123, { align: 'center' });
+      doc.setLineWidth(0.5);
+      doc.rect(gx, 72, 46, 32, 'FD');
+      doc.setFont('courier', 'bold');
+      doc.setFontSize(8.5);
+      doc.text(pdfSafe(`${gb} 24V DC`), gx + 23, 84, { align: 'center' });
+      doc.setFont('courier', 'normal');
+      doc.setFontSize(7);
+      doc.text('230V AC -> 24V DC', gx + 23, 91, { align: 'center' });
+      doc.text('L       N       PE', gx + 22, 76.5, { align: 'center' });
+      doc.text('+24V          0V', gx + 23, 101.5, { align: 'center' });
 
-      // Ausgaenge +24V (Rot) & 0V (Dunkelblau)
-      doc.setLineWidth(0.6);
-      doc.setDrawColor(220, 38, 38);
-      doc.line(px + 14, 126, px + 14, 152);
-      doc.line(px + 14, 152, 276, 152);
-      doc.setTextColor(220, 38, 38);
-      doc.setFont('helvetica', 'bold');
-      doc.text(pdfSafe('+24V DC -> Klemmblock -X1 & Steuerstromkreise (Blatt ff.)'), px + 17, 150);
-
+      // +24V Ausgang (blau, ggf. ueber Hauptschalter S1) -> Klemme -X20.1 -> Weiterfuehrung zu Folgeseite
       doc.setDrawColor(29, 78, 216);
-      doc.line(px + 38, 126, px + 38, 166);
-      doc.line(px + 38, 166, 276, 166);
-      doc.setTextColor(29, 78, 216);
-      doc.text(pdfSafe('0V (GND) -> Sammelschiene -X0 & alle Spulen A2 / X2 / GND'), px + 41, 164);
+      doc.setLineWidth(0.55);
+      if (mainSwitch) {
+        const sb = bmkMap.get(mainSwitch.id)?.bmk ?? '-S1';
+        doc.line(gx + 12, 104, gx + 12, 114);
+        doc.setDrawColor(15, 23, 42);
+        doc.line(gx + 8, 115, gx + 12, 123);
+        doc.setFontSize(6.5);
+        doc.text(pdfSafe(`${sb} 13/14`), gx + 14.5, 120);
+        doc.setDrawColor(29, 78, 216);
+        doc.line(gx + 12, 123, gx + 12, 138);
+      } else {
+        doc.line(gx + 12, 104, gx + 12, 138);
+      }
+      // Klemme -X20.1
+      doc.setFillColor(255, 255, 255);
+      doc.setDrawColor(15, 23, 42);
+      doc.circle(gx + 12, 138, 1.3, 'FD');
+      doc.setFont('courier', 'normal');
+      doc.setFontSize(7);
+      doc.text('-X20.1', gx + 1, 139);
 
-      px += 78;
+      // 0V Ausgang (blau-weiss) -> Klemme -X20.2
+      drawBlueWhiteWire(doc, gx + 34, 104, gx + 34, 148, 0.62);
+      doc.setDrawColor(15, 23, 42);
+      doc.circle(gx + 34, 148, 1.3, 'FD');
+      doc.text('-X20.2', gx + 22.5, 149);
+
+      // Weiterleitung nach rechts mit Blatt-Querverweis
+      const nextTargetRef =
+        controlSheets.length > 0 ? `${firstCtrlSheetNr}.0` : `${pwrSheetNr}.9`;
+      doc.setDrawColor(29, 78, 216);
+      doc.setLineWidth(0.55);
+      doc.line(gx + 12, 138, 278, 138);
+      doc.setFont('courier', 'bold');
+      doc.setFontSize(7.2);
+      doc.setTextColor(29, 78, 216);
+      doc.text(pdfSafe(`+24V DC (blau) -> ${nextTargetRef}`), 278, 136, { align: 'right' });
+
+      drawBlueWhiteWire(doc, gx + 34, 148, 278, 148, 0.62);
+      doc.setTextColor(37, 99, 235);
+      doc.text(pdfSafe(`0V DC (blau-weiß) -> ${nextTargetRef}`), 278, 146, { align: 'right' });
+
+      gx += 64;
     }
 
-    // Block 2: 230V AC Einspeisung(en) Q1 + Luftpumpen
-    if (psu230s.length > 0 || airPumps.length > 0) {
-      let ax = Math.max(px, 124);
-      for (const ap of airPumps) {
-        const ab = bmkMap.get(ap.id)?.bmk ?? 'AP';
-        const pMode = String(ap.params?.powerMode ?? 'ac_230v_direct');
-        const kr = couplingRelays.find((k) => k.airPumpId === ap.id);
+    // 230V AC Verbraucher (Luftpumpen) rechts daneben (Spalten 4..9 sauber am EPLAN-Raster)
+    const pwrColW = (285 - 14) / 10;
+    airPumps.forEach((ap, apIdx) => {
+      const targetCol = Math.min(8, 4 + apIdx * 2);
+      const ax = Math.max(gx + 14, 14 + targetCol * pwrColW);
+      const ab = bmkMap.get(ap.id)?.bmk ?? 'AP';
+      const pMode = String(ap.params?.powerMode ?? 'ac_230v_direct');
+      const kr = couplingRelays.find((k) => k.airPumpId === ap.id);
 
-        // L / N / PE Abgang
-        doc.setLineWidth(0.5);
-        doc.setDrawColor(234, 88, 12); // Kraftiges Orange fuer 230V L
-        doc.line(ax + 12, yL, ax + 12, 62);
-        doc.circle(ax + 12, yL, 0.9, 'F');
-        doc.setFillColor(255, 255, 255);
-        doc.rect(ax + 9.5, 62, 5, 9, 'FD');
-        doc.setFontSize(6.8);
+      doc.setLineWidth(0.45);
+      doc.setDrawColor(234, 88, 12); // Kraftiges Orange fuer 230V L
+      doc.line(ax + 10, yL, ax + 10, 52);
+      doc.circle(ax + 10, yL, 0.8, 'F');
+      doc.setFillColor(255, 255, 255);
+      doc.setDrawColor(15, 23, 42);
+      doc.rect(ax + 7.5, 52, 5, 8, 'FD');
+      doc.setFont('courier', 'normal');
+      doc.setFontSize(6.5);
+      doc.setTextColor(15, 23, 42);
+      doc.text(`-F${apIdx + 2}`, ax + 14, 57.5);
+
+      doc.setDrawColor(234, 88, 12);
+      doc.line(ax + 10, 60, ax + 10, 68);
+      if (kr) {
+        // Koppelrelais NO Kontakt 11-14 grafisch im 230V Pfad + roter Querverweis zur Spule
+        doc.setDrawColor(15, 23, 42);
+        doc.line(ax + 6, 68.5, ax + 10, 77);
+        doc.setDrawColor(234, 88, 12);
+        doc.line(ax + 10, 77, ax + 10, 88);
+        doc.setFont('courier', 'bold');
+        doc.setFontSize(7);
         doc.setTextColor(15, 23, 42);
-        doc.text('-F2', ax + 16, 67.5);
+        doc.text(pdfSafe(`${kr.bmk} (11/14)`), ax + 13.5, 73);
+        const coilRef = couplingCoilRefMap.get(kr.bmk);
+        if (coilRef) {
+          doc.setFont('courier', 'normal');
+          doc.setFontSize(6.5);
+          doc.setTextColor(220, 38, 38);
+          doc.text(pdfSafe(coilRef), ax + 13.5, 77.5);
+        }
+      } else if (psu230s.length > 0 && pMode === 'ac_230v_direct') {
+        const qb = bmkMap.get(psu230s[0].id)?.bmk ?? '-Q1';
+        doc.setDrawColor(15, 23, 42);
+        doc.line(ax + 6.5, 68.5, ax + 10, 77);
+        doc.setDrawColor(234, 88, 12);
+        doc.line(ax + 10, 77, ax + 10, 88);
+        doc.setFont('courier', 'normal');
+        doc.setFontSize(6.8);
+        doc.text(pdfSafe(`${qb} EIN/AUS`), ax + 14, 74);
+      } else {
+        doc.line(ax + 10, 68, ax + 10, 88);
+      }
 
-        if (kr) {
-          // Koppelrelais-Kontakt 11-14 im 230V Pfad
-          doc.setDrawColor(234, 88, 12);
-          doc.line(ax + 12, 71, ax + 12, 82);
-          doc.line(ax + 12, 82, ax + 7.5, 91); // Schliesser
-          doc.line(ax + 12, 92, ax + 12, 102);
-          doc.setFont('helvetica', 'bold');
-          doc.setFontSize(7.2);
-          doc.text(pdfSafe(`${kr.bmk} (11-14)`), ax + 15.5, 86);
-          doc.setFont('helvetica', 'normal');
-          doc.text(pdfSafe(`24V Spule: ${kr.triggerSourceText}`), ax + 15.5, 90.5);
-        } else {
-          // Direktschalter / Q1
-          doc.setDrawColor(234, 88, 12);
-          doc.line(ax + 12, 71, ax + 12, 82);
-          doc.line(ax + 12, 82, ax + 8, 91);
-          doc.line(ax + 12, 92, ax + 12, 102);
-          doc.setFontSize(7.2);
-          doc.text(pdfSafe(pMode === 'fixed_power' ? 'Stecker' : '-Q1 EIN/AUS'), ax + 15.5, 87);
+      doc.setDrawColor(37, 99, 235);
+      doc.line(ax + 24, yN, ax + 24, 88);
+      doc.circle(ax + 24, yN, 0.8, 'F');
+      doc.setDrawColor(22, 163, 74);
+      doc.line(ax + 38, yPE, ax + 38, 88);
+      doc.circle(ax + 38, yPE, 0.8, 'F');
+
+      // Motor/Pumpen Box
+      doc.setFillColor(255, 247, 237);
+      doc.setDrawColor(234, 88, 12);
+      doc.setLineWidth(0.5);
+      doc.rect(ax, 88, 48, 28, 'FD');
+      doc.setFont('courier', 'bold');
+      doc.setFontSize(8.2);
+      doc.setTextColor(154, 52, 18);
+      doc.text(pdfSafe(`${ab} ${ap.label}`).slice(0, 20), ax + 24, 99, { align: 'center' });
+      doc.setFont('courier', 'normal');
+      doc.setFontSize(6.8);
+      doc.text('L       N      PE', ax + 24, 92.5, { align: 'center' });
+      doc.text(pdfSafe(`AquaForte ${String(ap.params?.model ?? 'V-20')}`), ax + 24, 106, {
+        align: 'center',
+      });
+      doc.text(
+        pdfSafe(kr ? '24V Koppelrelais' : '230V AC direkt'),
+        ax + 24,
+        112.5,
+        { align: 'center' }
+      );
+    });
+
+    // =======================================================================
+    // STEUERSTROMKREISE 24V DC / 0V (EPLAN 10-SPALTEN-BLATT MIT KONTAKTEN)
+    // =======================================================================
+    const gridLeft = 14;
+    const gridRight = 285;
+    const colW = (gridRight - gridLeft) / 10; // 27.1 mm je Spalte
+
+    controlSheets.forEach((cols, sIdx) => {
+      const sNr = nextPage(true, 'Stromlaufplan 24V DC');
+      const y24 = 24;
+      const y0 = 122;
+
+      // +24V DC Schiene oben (Blau) & 0V DC Schiene unterhalb der Spulen (Blau-Weiss)
+      doc.setLineWidth(0.55);
+      doc.setDrawColor(29, 78, 216);
+      doc.line(gridLeft, y24, gridRight, y24);
+      drawBlueWhiteWire(doc, gridLeft, y0, gridRight, y0, 0.62);
+
+      doc.setFont('courier', 'bold');
+      doc.setFontSize(7.2);
+      doc.setTextColor(29, 78, 216);
+      doc.text(
+        pdfSafe(sIdx === 0 ? `${pwrSheetNr}.0 24V (blau)` : `${sNr - 1}.9 24V`),
+        gridLeft - 1,
+        y24 - 1.5
+      );
+      doc.setTextColor(37, 99, 235);
+      doc.text(
+        pdfSafe(sIdx === 0 ? `${pwrSheetNr}.0 0V (bl-ws)` : `${sNr - 1}.9 0V`),
+        gridLeft - 1,
+        y0 - 1.5
+      );
+
+      if (sIdx < controlSheets.length - 1) {
+        doc.setTextColor(29, 78, 216);
+        doc.text(pdfSafe(`${sNr + 1}.0 24V`), gridRight, y24 - 1.5, { align: 'right' });
+        doc.setTextColor(37, 99, 235);
+        doc.text(pdfSafe(`${sNr + 1}.0 0V`), gridRight, y0 - 1.5, { align: 'right' });
+      }
+
+      // Trennlinie zwischen Schaltfeld und unterem Text-/Kontaktspiegel-Bereich (klar unterhalb von 0V!)
+      doc.setDrawColor(203, 213, 225);
+      doc.setLineWidth(0.25);
+      doc.line(gridLeft, 127, gridRight, 127);
+
+      cols.forEach((col, cIdx) => {
+        const cx = gridLeft + cIdx * colW + colW / 2;
+
+        // Klemmenpunkt oben an +24V (blau)
+        doc.setDrawColor(29, 78, 216);
+        doc.setFillColor(29, 78, 216);
+        doc.setLineWidth(0.42);
+        if (col.upstream.kind !== 'open') {
+          doc.circle(cx, y24, 0.75, 'F');
+          doc.line(cx, y24, cx, 42);
         }
 
-        // N & PE runter zur Pumpe
-        doc.setDrawColor(37, 99, 235);
-        doc.line(ax + 26, yN, ax + 26, 102);
-        doc.circle(ax + 26, yN, 0.9, 'F');
-        doc.setDrawColor(22, 163, 74);
-        doc.line(ax + 38, yPE, ax + 38, 102);
-        doc.circle(ax + 38, yPE, 0.9, 'F');
+        // Optionale Klemmenbezeichnung (z. B. -X1:1)
+        if (col.upstream.terminalTag) {
+          doc.setFillColor(255, 255, 255);
+          doc.setDrawColor(15, 23, 42);
+          doc.setLineWidth(0.3);
+          doc.circle(cx, 33, 1.15, 'FD');
+          doc.setFont('courier', 'normal');
+          doc.setFontSize(6.2);
+          doc.setTextColor(15, 23, 42);
+          doc.text(pdfSafe(col.upstream.terminalTag), cx - 2, 33.8, { align: 'right' });
+        }
 
-        // Pumpe Motor-Symbol Box
-        doc.setFillColor(255, 247, 237);
-        doc.setDrawColor(234, 88, 12);
-        doc.setLineWidth(0.6);
-        doc.roundedRect(ax, 102, 50, 32, 2, 2, 'FD');
-        doc.setFont('helvetica', 'bold');
-        doc.setFontSize(8.5);
-        doc.setTextColor(154, 52, 18);
-        doc.text(pdfSafe(`${ab} ${ap.label}`), ax + 25, 112, { align: 'center' });
-        doc.setFont('helvetica', 'normal');
-        doc.setFontSize(7.2);
-        doc.text(pdfSafe(`AquaForte ${String(ap.params?.model ?? 'V-20')} | 230V~`), ax + 25, 119, { align: 'center' });
-        doc.text('L            N          PE', ax + 25, 107, { align: 'center' });
-        doc.text(
-          pdfSafe(kr ? 'Geschaltet ueber 24V Koppelrelais' : 'Dauerbetrieb 230V AC direkt'),
-          ax + 25,
-          127,
-          { align: 'center' }
-        );
+        // Kontakt-Querverweis auf Spulen-Position
+        const contactCoilRef = col.upstream.contactCompId
+          ? compToRefCode.get(col.upstream.contactCompId)
+          : undefined;
 
-        ax += 66;
-      }
-    }
+        // Grafisches Kontaktsymbol (y = 42..70)
+        drawContactSymbol(doc, cx, 42, 70, col.upstream, contactCoilRef);
 
-    // Blatt 2.2+: Steuerstromkreise 24V DC / 0V Strompfade
-    for (let offset = 0; offset < currentPaths.length; offset += pathsPerPage) {
-      beginNewPage('2. Stromlaufplan 24V DC / 0V (Strompfade & Kontaktspiegel)');
-      const slice = currentPaths.slice(offset, offset + pathsPerPage);
-
-      const railTopY = 36;
-      const railBotY = 166;
-      doc.setLineWidth(0.65);
-      doc.setDrawColor(220, 38, 38); // +24V DC Schiene
-      doc.line(20, railTopY, 282, railTopY);
-      doc.setDrawColor(29, 78, 216); // 0V GND Schiene
-      doc.line(20, railBotY, 282, railBotY);
-
-      doc.setFont('helvetica', 'bold');
-      doc.setFontSize(8);
-      doc.setTextColor(220, 38, 38);
-      doc.text('+24V DC', 10, railTopY + 1);
-      doc.setTextColor(29, 78, 216);
-      doc.text('0V (GND)', 10, railBotY + 1);
-
-      const colStep = 36;
-      slice.forEach((p, idx) => {
-        const cx = 40 + idx * colStep;
-
-        // Pfadnummer oben
-        doc.setFillColor(241, 245, 249);
-        doc.setDrawColor(148, 163, 184);
-        doc.setLineWidth(0.25);
-        doc.rect(cx - 15, 24, 30, 7, 'FD');
-        doc.setFont('helvetica', 'bold');
-        doc.setFontSize(8);
-        doc.setTextColor(15, 23, 42);
-        doc.text(`Pfad ${p.pathNr}`, cx, 28.8, { align: 'center' });
-
-        // Vertikale Strompfad-Linie oben (+24V bis Spule)
-        doc.setDrawColor(220, 38, 38);
-        doc.setLineWidth(0.45);
-        doc.circle(cx, railTopY, 0.85, 'F');
-        doc.line(cx, railTopY, cx, 55);
-
-        // Speisender Kontakt / Klemme oben
-        doc.setFillColor(255, 255, 255);
-        doc.setDrawColor(15, 23, 42);
-        doc.setLineWidth(0.35);
-        doc.line(cx, 55, cx - 4, 65); // Kontaktsymbol schraeg
-        doc.line(cx, 66, cx, 98);
-
-        doc.setFont('helvetica', 'normal');
-        doc.setFontSize(6.6);
-        doc.setTextColor(51, 65, 85);
-        const feederLines = doc.splitTextToSize(pdfSafe(p.feederText), 32);
-        doc.text(feederLines.slice(0, 2), cx + 3.5, 58);
-
-        // B1 Trigger-Abzweig bei Zeitrelais
-        if (p.b1Text) {
+        if (col.kind === 'b1_trigger') {
+          // Steuerkontakt B1: von y=70 nach rechts direkt auf Klemme B1 des naechsten Bauteils!
+          const nextCx = cx + colW;
           doc.setDrawColor(217, 119, 6);
-          doc.line(cx - 14, 92, cx, 92);
+          doc.setLineWidth(0.42);
+          doc.line(cx, 70, cx, 92);
+          doc.line(cx, 92, nextCx - 7, 92);
+
+          doc.setFont('courier', 'normal');
           doc.setFontSize(6.2);
           doc.setTextColor(180, 83, 9);
-          doc.text(pdfSafe(`B1: ${p.b1Text}`).slice(0, 20), cx - 15, 89.5);
-          doc.setTextColor(15, 23, 42);
+          doc.text(pdfSafe(col.modeLine), cx, 133, { align: 'center' });
+          doc.text('Steuerkontakt', cx, 139, { align: 'center' });
+          return;
         }
 
-        // Verbraucher / Spulensymbol (Mitte)
+        // Verbindung vom Kontakt zur Spule A1
+        doc.setDrawColor(15, 23, 42);
+        doc.setLineWidth(0.42);
+        doc.line(cx, 70, cx, 84);
+
+        // Spulen-/Ventil-/Melder-Symbol (y = 84..96)
         doc.setFillColor(255, 255, 255);
         doc.setDrawColor(15, 23, 42);
-        doc.setLineWidth(0.55);
-        doc.rect(cx - 8, 98, 16, 12, 'FD');
+        doc.setLineWidth(0.5);
 
-        doc.setFont('helvetica', 'bold');
-        doc.setFontSize(7.5);
-        doc.setTextColor(15, 23, 42);
-        doc.text(pdfSafe(p.coilBmk), cx, 105.5, { align: 'center' });
-
-        // Klemmen A1 / A2
-        doc.setFont('helvetica', 'normal');
-        doc.setFontSize(6.5);
-        doc.text(pdfSafe(p.coilTopTerm), cx + 9, 100);
-        doc.text(pdfSafe(p.coilBottomTerm), cx + 9, 110);
-
-        // Funktion & Bezeichnung unter Spule
-        doc.setFont('helvetica', 'bold');
-        doc.setFontSize(6.6);
-        const titleLines = doc.splitTextToSize(pdfSafe(p.title), 32);
-        doc.text(titleLines.slice(0, 2), cx, 115, { align: 'center' });
-        if (p.functionCode) {
-          doc.setFont('helvetica', 'normal');
-          doc.setFontSize(6.2);
-          doc.setTextColor(3, 105, 161);
-          doc.text(pdfSafe(p.functionCode), cx, 122, { align: 'center' });
+        if (col.symbolType === 'lamp') {
+          doc.circle(cx, 90, 5.5, 'FD');
+          doc.line(cx - 3.8, 86.2, cx + 3.8, 93.8);
+          doc.line(cx - 3.8, 93.8, cx + 3.8, 86.2);
+        } else {
+          doc.rect(cx - 7, 84, 14, 12, 'FD');
+          if (col.symbolType === 'valve') {
+            // Schraegstrich im Magnetventilsymbol (DIN)
+            doc.line(cx - 7, 96, cx + 7, 84);
+          } else if (col.symbolType === 'timer') {
+            // Kleiner Uhr-/Zeit-Querstrich links am Spulensymbol (wie E1ZM10)
+            doc.line(cx - 4.5, 84, cx - 4.5, 96);
+          }
         }
 
-        // 0V Rueckleitung runter bis 0V Sammelschiene
-        doc.setDrawColor(29, 78, 216);
-        doc.setLineWidth(0.45);
-        doc.line(cx, 110, cx, railBotY);
-        doc.circle(cx, railBotY, 0.85, 'F');
+        // BMK links neben Spule
+        doc.setFont('courier', 'bold');
+        doc.setFontSize(7.5);
+        doc.setTextColor(15, 23, 42);
+        doc.text(pdfSafe(col.bmk), cx - 8.2, 91, { align: 'right' });
 
-        // Kontaktspiegel unterhalb der 0V-Schiene
-        if (p.mirrorEntries.length > 0) {
+        // Klemmen A1 / A2 / B1 direkt am Symbol (weit weg von 0V!)
+        doc.setFont('courier', 'normal');
+        doc.setFontSize(6.2);
+        doc.setTextColor(51, 65, 85);
+        doc.text(pdfSafe(col.topTerm), cx + 1.8, 82.8);
+        doc.text(pdfSafe(col.botTerm), cx + 1.8, 99.8);
+        if (col.symbolType === 'timer') {
+          doc.setTextColor(180, 83, 9);
+          doc.text('B1', cx - 6.2, 95);
+        }
+
+        // 0V Rueckleitung (blau-weiss) gerade runter auf 0V-Sammelschiene (y = 96 -> 122)
+        drawBlueWhiteWire(doc, cx, 96, cx, y0, 0.48);
+        doc.setFillColor(29, 78, 216);
+        doc.circle(cx, y0, 0.75, 'F');
+
+        // SAUBERES BESCHRIFTUNGSFELD UNTERHALB 0V (y = 131..178) -> KEINE UEBERLAPPUNG!
+        doc.setFont('helvetica', 'bold');
+        doc.setFontSize(6.4);
+        doc.setTextColor(15, 23, 42);
+        const wrappedTitle = doc.splitTextToSize(pdfSafe(col.title), colW - 3);
+        doc.text(wrappedTitle.slice(0, 2), cx, 132.5, { align: 'center' });
+
+        if (col.modeLine) {
+          doc.setFont('courier', 'bold');
+          doc.setFontSize(6.3);
+          doc.setTextColor(3, 105, 161);
+          const modeWrapped = doc.splitTextToSize(pdfSafe(col.modeLine), colW - 2.5);
+          doc.text(modeWrapped.slice(0, 2), cx, 141.5, { align: 'center' });
+        }
+
+        // Kontaktspiegel sauber ganz unten (y = 151..180)
+        if (col.mirrorRefs.length > 0) {
           doc.setDrawColor(148, 163, 184);
-          doc.setLineWidth(0.25);
-          doc.rect(cx - 16, 170, 32, 19);
-          doc.setFont('helvetica', 'bold');
-          doc.setFontSize(6);
-          doc.setTextColor(51, 65, 85);
-          doc.text('Kontaktspiegel:', cx - 14.5, 174);
-          doc.setFont('helvetica', 'normal');
-          let my = 178;
-          for (const m of p.mirrorEntries.slice(0, 3)) {
-            const lineTxt = `${m.kind} ${m.term} -> ${m.targetPathText}`;
-            doc.text(pdfSafe(lineTxt).slice(0, 25), cx - 14.5, my);
-            my += 3.6;
+          doc.setLineWidth(0.22);
+          doc.line(cx - 11, 148.5, cx + 11, 148.5);
+          doc.setFont('courier', 'bold');
+          doc.setFontSize(5.8);
+          doc.setTextColor(71, 85, 105);
+          doc.text('Kontakte:', cx, 152, { align: 'center' });
+          doc.setFont('courier', 'normal');
+          let my = 155.8;
+          for (const mr of col.mirrorRefs.slice(0, 4)) {
+            doc.setTextColor(15, 23, 42);
+            doc.text(pdfSafe(`${mr.termLabel}`), cx - 10, my);
+            doc.setTextColor(220, 38, 38);
+            doc.text(pdfSafe(mr.targetRef), cx + 10, my, { align: 'right' });
+            my += 4;
           }
         }
       });
-    }
+    });
   }
 
   // =========================================================================
-  // ABSCHNITT 3: KLEMMENPLAN (-X1 / -X0) & VERDRAHTUNGS-HAKENLISTE
+  // OPTIONAL: KOMPAKTER KLEMMENPLAN (-X1) FALLS ANGEWAEHLT
   // =========================================================================
-  if (options.includeWiringAndTerminals) {
-    // 3.1 Klemmenplan -X1 (falls Klemmblock vorhanden)
-    if (terminalBlockComps.length > 0) {
-      beginNewPage('3. Klemmenplan (-X1 +24V-Potentialverteiler & -X0 0V-Sammelschiene)');
-      let txCursor = 14;
-      for (const tb of terminalBlockComps) {
-        const tbBmk = bmkMap.get(tb.id)?.bmk ?? '-X1';
-        const outCount = Number(tb.params?.outputCount ?? 10);
-        doc.setFont('helvetica', 'bold');
-        doc.setFontSize(9);
-        doc.setTextColor(15, 23, 42);
-        doc.text(pdfSafe(`Klemmleiste ${tbBmk} (${tb.label}) - ${outCount}-fach +24V`), 14, 28);
-
-        const tCols = [18, 28, 80, 62, 78];
-        drawTableRow(
-          doc,
-          txCursor,
-          31,
-          tCols,
-          ['Klemme', 'Potential', 'Angeschlossenes Betriebsmittel', 'Ader / Querschnitt', 'Hinweis'],
-          7,
-          true
-        );
-
-        let ry = 38;
-        const maxRows = Math.min(outCount, 18);
-        for (let k = 1; k <= maxRows; k++) {
-          const portId = `out_${k}`;
-          const conns = validConnections.filter(
-            (c) =>
-              (c.fromCompId === tb.id && c.fromPortId === portId) ||
-              (c.toCompId === tb.id && c.toPortId === portId)
-          );
-          const targetDesc =
-            conns.length > 0
-              ? conns
-                  .map((c) => {
-                    const otherId = c.fromCompId === tb.id ? c.toCompId : c.fromCompId;
-                    const otherPort = c.fromCompId === tb.id ? c.toPortId : c.fromPortId;
-                    const oc = compMap.get(otherId);
-                    const ob = bmkMap.get(otherId)?.bmk ?? '?';
-                    return `${ob}:${formatPortLabel(oc?.type ?? '', otherPort)} (${oc?.label ?? ''})`;
-                  })
-                  .join(' / ')
-              : '-- Reserve / frei --';
-
-          drawTableRow(
-            doc,
-            txCursor,
-            ry,
-            tCols,
-            [
-              `${tbBmk}:${k}`,
-              '+24V DC',
-              targetDesc,
-              conns.length > 0 ? 'H07V-K 0.75 mm2 Rot' : '-',
-              conns.length > 1 ? 'Doppeladerendhuelse!' : conns.length === 1 ? 'Belegt' : 'Reserve',
-            ],
-            7.8,
-            false
-          );
-          ry += 7.8;
-        }
-      }
-    }
-
-    // 3.2 Ader-fuer-Ader Verdrahtungs-Hakenliste
-    const wireCols = [10, 12, 42, 42, 38, 48, 77];
-    for (let offset = 0; offset < wireList.length; offset += wiresPerPage) {
-      beginNewPage('3. Ader-fuer-Ader Verdrahtungs-Hakenliste (Werkstatt / Abhaken)');
+  if (options.includeTerminalPlan && terminalBlockComps.length > 0) {
+    nextPage(false, 'Klemmenbelegung (-X1 +24V-Potentialverteiler)');
+    const tb = terminalBlockComps[0];
+    const tbBmk = bmkMap.get(tb.id)?.bmk ?? '-X1';
+    const outCount = Number(tb.params?.outputCount ?? 10);
+    const tCols = [20, 32, 110, 105];
+    drawTableRow(
+      doc,
+      14,
+      24,
+      tCols,
+      ['Klemme', 'Potential', 'Ziel-Bauteil (BMK : Klemme)', 'Bezeichnung'],
+      7.5,
+      true
+    );
+    let ry = 31.5;
+    for (let k = 1; k <= Math.min(outCount, 16); k++) {
+      const portId = `out_${k}`;
+      const conns = validConnections.filter(
+        (c) =>
+          (c.fromCompId === tb.id && c.fromPortId === portId) ||
+          (c.toCompId === tb.id && c.toPortId === portId)
+      );
+      const targetDesc =
+        conns.length > 0
+          ? conns
+              .map((c) => {
+                const otherId = c.fromCompId === tb.id ? c.toCompId : c.fromCompId;
+                const otherPort = c.fromCompId === tb.id ? c.toPortId : c.fromPortId;
+                const oc = compMap.get(otherId);
+                const ob = bmkMap.get(otherId)?.bmk ?? '?';
+                return `${ob}:${formatPortLabel(oc?.type ?? '', otherPort)}`;
+              })
+              .join(' / ')
+          : '-- Reserve --';
+      const labelDesc =
+        conns.length > 0
+          ? conns
+              .map((c) => compMap.get(c.fromCompId === tb.id ? c.toCompId : c.fromCompId)?.label ?? '')
+              .join(' / ')
+          : 'Frei';
       drawTableRow(
         doc,
         14,
-        24,
-        wireCols,
-        ['OK', 'Nr.', 'Von (BMK : Klemme)', 'Nach (BMK : Klemme)', 'Potential', 'Aderfarbe / Querschnitt', 'Montagehinweis'],
-        7.5,
-        true
+        ry,
+        tCols,
+        [`${tbBmk}:${k}`, '+24V DC (blau)', targetDesc, labelDesc],
+        8.6,
+        false
       );
-      let wy = 31.5;
-      const chunk = wireList.slice(offset, offset + wiresPerPage);
-      chunk.forEach((w) => {
-        drawTableRow(
-          doc,
-          14,
-          wy,
-          wireCols,
-          [
-            '[ ]',
-            String(w.nr),
-            `${w.fromBmk} : ${w.fromPort}`,
-            `${w.toBmk} : ${w.toPort}`,
-            w.potential,
-            w.colorSpec,
-            w.note || (w.isSynthesized ? 'Schaltschrank-Grundverdrahtung' : 'Steuerleitung'),
-          ],
-          9.4,
-          false,
-          w.potential.includes('230V')
-        );
-        wy += 9.4;
-      });
+      ry += 8.6;
     }
   }
 
   // =========================================================================
-  // ABSCHNITT 4: FLUIDIK- & PNEUMATIK-SCHEMA (R&I-FLIESSBILD & VERSCHLAUCHUNG)
+  // FLUIDIK- & PNEUMATIK-SCHEMA (R&I-FLIESSBILD & VERSCHLAUCHUNGSTABELLE)
   // =========================================================================
   if (options.includeFluidAndAir) {
-    beginNewPage('4. Fluidik- & Pneumatik-Schema (R&I-Fliessbild)');
+    nextPage(false, 'Fluidik- & Pneumatik-Schema (R&I-Fliessbild)');
 
     const fluidComps = circuit.components.filter(
       (c) =>
@@ -1679,9 +1892,9 @@ export function generateCircuitPdf(
     }
 
     const boxX = 16;
-    const boxY = 26;
+    const boxY = 20;
     const boxW = 265;
-    const boxH = 148;
+    const boxH = 152;
     const spanX = Math.max(200, maxX - minX + 80);
     const spanY = Math.max(150, maxY - minY + 80);
     const scale = Math.min(boxW / spanX, boxH / spanY);
@@ -1692,7 +1905,6 @@ export function generateCircuitPdf(
     doc.setFillColor(250, 252, 255);
     doc.rect(boxX, boxY, boxW, boxH, 'FD');
 
-    // Leitungen im Fliessbild
     const obstacles: ComponentObstacle[] = plotComps.map((c) => {
       const sz = COMPONENT_SIZE_FALLBACK[c.type] ?? { w: 180, h: 120 };
       return { id: c.id, x: c.x, y: c.y, width: sz.w, height: sz.h };
@@ -1745,7 +1957,7 @@ export function generateCircuitPdf(
       if (pts.length < 2) continue;
 
       if (cn.domain === 'air') {
-        doc.setDrawColor(8, 145, 178); // Cyan Druckluft
+        doc.setDrawColor(8, 145, 178);
         doc.setLineWidth(0.55);
       } else {
         const fc = compMap.get(cn.fromCompId);
@@ -1763,11 +1975,11 @@ export function generateCircuitPdf(
               (tc?.params?.medium as FluidMedium) ??
               'water';
         if (med === 'katholyte') {
-          doc.setDrawColor(5, 150, 105); // Gruen
+          doc.setDrawColor(5, 150, 105);
         } else if (med === 'anolyte') {
-          doc.setDrawColor(202, 138, 4); // Gelb/Ocker
+          doc.setDrawColor(202, 138, 4);
         } else {
-          doc.setDrawColor(29, 78, 216); // Dunkelblau Wasser
+          doc.setDrawColor(29, 78, 216);
         }
         doc.setLineWidth(0.8);
       }
@@ -1784,7 +1996,6 @@ export function generateCircuitPdf(
       }
     }
 
-    // Bauteile im Fliessbild
     for (const c of plotComps) {
       const sz = COMPONENT_SIZE_FALLBACK[c.type] ?? { w: 180, h: 120 };
       const rx = offsetX + c.x * scale;
@@ -1818,7 +2029,7 @@ export function generateCircuitPdf(
     doc.setFont('helvetica', 'bold');
     doc.setFontSize(7.5);
     doc.setTextColor(15, 23, 42);
-    doc.text('Medien-Legende:', 16, 182);
+    doc.text('Medien-Legende:', 16, 179);
     const legItems: Array<{ label: string; rgb: [number, number, number]; x: number }> = [
       { label: 'Anolyt (Gelb)', rgb: [202, 138, 4], x: 48 },
       { label: 'Katholyte (Gruen)', rgb: [5, 150, 105], x: 88 },
@@ -1828,29 +2039,27 @@ export function generateCircuitPdf(
     for (const item of legItems) {
       doc.setDrawColor(...item.rgb);
       doc.setLineWidth(1.4);
-      doc.line(item.x, 181, item.x + 8, 181);
+      doc.line(item.x, 178, item.x + 8, 178);
       doc.setFont('helvetica', 'normal');
       doc.setTextColor(30, 41, 59);
-      doc.text(item.label, item.x + 10, 182);
+      doc.text(item.label, item.x + 10, 179);
     }
 
-    // Verschlauchungs-Tabelle auf Folgeseite
     if (fluidAirConns.length > 0) {
       const fCols = [12, 48, 36, 48, 36, 36, 53];
       for (let offset = 0; offset < fluidAirConns.length; offset += 18) {
-        beginNewPage('4. Verschlauchungs- & Verrohrungstabelle');
+        nextPage(false, 'Verschlauchungs- & Verrohrungstabelle');
         drawTableRow(
           doc,
           14,
-          24,
+          22,
           fCols,
-          ['Nr.', 'Quelle (BMK / Name)', 'Ausgang', 'Ziel (BMK / Name)', 'Eingang', 'Medium', 'Hinweis / Nennweite'],
+          ['Nr.', 'Quelle (BMK / Name)', 'Ausgang', 'Ziel (BMK / Name)', 'Eingang', 'Medium', 'Leitungsart'],
           7.5,
           true
         );
-        let fy = 31.5;
-        const chunk = fluidAirConns.slice(offset, offset + 18);
-        chunk.forEach((cn, idx) => {
+        let fy = 29.5;
+        fluidAirConns.slice(offset, offset + 18).forEach((cn, idx) => {
           const fc = compMap.get(cn.fromCompId)!;
           const tc = compMap.get(cn.toCompId)!;
           const fb = bmkMap.get(fc.id)?.bmk ?? '';
@@ -1879,7 +2088,7 @@ export function generateCircuitPdf(
               `${tb} ${tc.label}`,
               formatPortLabel(tc.type, cn.toPortId),
               med,
-              cn.domain === 'air' ? 'Pneumatikschlauch 6/8mm' : 'Chemieschlauch / PVC-Rohr',
+              cn.domain === 'air' ? 'Pneumatikschlauch 6/8mm' : 'Chemieschlauch / PVC',
             ],
             8.4,
             false
@@ -1890,9 +2099,10 @@ export function generateCircuitPdf(
     }
   }
 
-  const safeSlug = cleanName
-    .toLowerCase()
-    .replace(/[^a-z0-9äöüß]+/gi, '-')
-    .replace(/^-|-$/g, '') || 'schaltplan';
+  const safeSlug =
+    cleanName
+      .toLowerCase()
+      .replace(/[^a-z0-9äöüß]+/gi, '-')
+      .replace(/^-|-$/g, '') || 'schaltplan';
   doc.save(`${safeSlug}-anlagenbau-schaltplan-${new Date().toISOString().slice(0, 10)}.pdf`);
 }

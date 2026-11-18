@@ -185,16 +185,16 @@ export const PdfSchematicExportModal: React.FC<PdfSchematicExportModalProps> = (
 }) => {
   const [includeCoverAndBom, setIncludeCoverAndBom] = useState(true);
   const [includeElectrical, setIncludeElectrical] = useState(true);
-  const [includeWiringAndTerminals, setIncludeWiringAndTerminals] = useState(true);
   const [includeFluidAndAir, setIncludeFluidAndAir] = useState(true);
+  const [includeTerminalPlan, setIncludeTerminalPlan] = useState(false);
 
   if (!isOpen) return null;
 
   const anySelected =
     includeCoverAndBom ||
     includeElectrical ||
-    includeWiringAndTerminals ||
-    includeFluidAndAir;
+    includeFluidAndAir ||
+    includeTerminalPlan;
 
   const items: Array<{
     key: string;
@@ -207,29 +207,29 @@ export const PdfSchematicExportModal: React.FC<PdfSchematicExportModalProps> = (
       key: 'cover',
       checked: includeCoverAndBom,
       onChange: setIncludeCoverAndBom,
-      title: '1. Deckblatt, Stückliste (BOM) & Einstellwerte',
-      desc: 'BMK-Übersicht, Plausibilitätsprüfung (z. B. A2-Check) und alle Zeit-/Tank-Sollwerte.',
+      title: '1. Deckblatt (Aderfarben, Klemmleisten) & Stückliste (BOM)',
+      desc: 'Projekt-Übersicht, Aderfarbencode, Klemmleisten-Liste, BMK und alle Einstellwerte.',
     },
     {
       key: 'elec',
       checked: includeElectrical,
       onChange: setIncludeElectrical,
-      title: '2. Normnaher Stromlaufplan (230V AC + 24V DC + 0V/N/PE)',
-      desc: 'Strompfade mit Kontaktspiegel, automatischer 0V-Sammelschiene und 24V→230V Koppelrelais.',
-    },
-    {
-      key: 'wire',
-      checked: includeWiringAndTerminals,
-      onChange: setIncludeWiringAndTerminals,
-      title: '3. Klemmenplan (-X1 / -X0) & Verdrahtungs-Hakenliste',
-      desc: 'Ader-für-Ader-Checkliste zum Abhaken inkl. Querschnitt, Aderfarbe, 0V, N und PE.',
+      title: '2. EPLAN-Stromlaufplan (230V AC + 24V DC + 0V/N/PE)',
+      desc: 'Spaltenraster 0..9 mit grafischen Kontakten, Querverweisen, permanentem +24V auf A1 & sauberer 0V-Schiene.',
     },
     {
       key: 'fluid',
       checked: includeFluidAndAir,
       onChange: setIncludeFluidAndAir,
-      title: '4. Fluidik- & Pneumatik-Schema (R&I-Fließbild)',
-      desc: 'Skalierter Verrohrungsplan (Anolyt/Katholyte/Wasser/Druckluft) + Schlauchliste.',
+      title: '3. Fluidik- & Pneumatik-Schema (R&I-Fließbild)',
+      desc: 'Skalierter Verrohrungsplan (Anolyt/Katholyte/Wasser/Druckluft) + Verschlauchungstabelle.',
+    },
+    {
+      key: 'term',
+      checked: includeTerminalPlan,
+      onChange: setIncludeTerminalPlan,
+      title: '4. Klemmenbelegung (-X1 Tabelle, optional)',
+      desc: 'Kompakte Belegungstabelle der +24V-Reihenklemmen (ohne Verdrahtungs-Hakenliste).',
     },
   ];
 
@@ -257,8 +257,8 @@ export const PdfSchematicExportModal: React.FC<PdfSchematicExportModalProps> = (
 
         <div className="p-4 space-y-3 text-xs">
           <p className="text-slate-400 leading-relaxed">
-            Wähle aus, welche Blätter im DIN-A4-Querformat-PDF enthalten sein sollen. Ideal zum
-            1:1-Nachbau im Schaltschrank inkl. automatischer 0V-, N- und PE-Leitungen.
+            Erstellt einen DIN-A4-Querformat-Schaltplan im EPLAN-Stil mit Spaltenraster (0–9),
+            Schriftfeld, gezeichneten Schaltkontakten und automatischer 0V-, N- und PE-Führung.
           </p>
 
           <div className="space-y-2">
@@ -288,8 +288,8 @@ export const PdfSchematicExportModal: React.FC<PdfSchematicExportModalProps> = (
                 const next = !anySelected;
                 setIncludeCoverAndBom(next);
                 setIncludeElectrical(next);
-                setIncludeWiringAndTerminals(next);
                 setIncludeFluidAndAir(next);
+                setIncludeTerminalPlan(next);
               }}
               className="text-[11px] text-sky-400 hover:text-sky-300 cursor-pointer"
             >
@@ -311,8 +311,8 @@ export const PdfSchematicExportModal: React.FC<PdfSchematicExportModalProps> = (
                   onExport({
                     includeCoverAndBom,
                     includeElectrical,
-                    includeWiringAndTerminals,
                     includeFluidAndAir,
+                    includeTerminalPlan,
                   });
                   onClose();
                 }}
