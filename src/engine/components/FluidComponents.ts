@@ -556,8 +556,8 @@ export class GeneratorComponent extends SimComponent {
       },
       {
         id: 'fluid_katholyte',
-        label: 'Katholyt',
-        description: 'Katholyt-Ausgang (Grün, nebenrangig)',
+        label: 'Katholyte',
+        description: 'Katholyte-Ausgang (Grün, nebenrangig)',
         domain: 'fluid',
         direction: 'output',
         side: 'right',
@@ -1611,7 +1611,7 @@ export class InjectionPointComponent extends SimComponent {
 }
 
 export type AirPumpModel = 'V-10' | 'V-20' | 'V-30' | 'V-60';
-export type AirPumpPowerMode = 'fixed_power' | 'external_24v';
+export type AirPumpPowerMode = 'ac_230v_direct' | 'external_24v' | 'fixed_power';
 
 export const AIR_PUMP_MODELS: Record<
   AirPumpModel,
@@ -1626,20 +1626,21 @@ export const AIR_PUMP_MODELS: Record<
 export class AirPumpComponent extends SimComponent {
   public readonly type = 'air_pump';
   public readonly category: ComponentCategory = 'fluid';
-  public readonly width = 204;
-  public readonly height = 138;
+  public readonly width = 208;
+  public readonly height = 144;
 
   constructor(id: string, label = 'AP1 AquaForte Luftpumpe', x = 0, y = 0) {
     super(id, label, x, y);
     this.params = {
       model: 'V-20' as AirPumpModel,
-      powerMode: 'fixed_power' as AirPumpPowerMode,
+      powerMode: 'ac_230v_direct' as AirPumpPowerMode,
       enabled: true,
     };
     this.runtimeState = {
-      running: true,
+      running: false,
       externalSignal: false,
-      airFlowLpm: 20,
+      wrongVoltage: false,
+      airFlowLpm: 0,
     };
   }
 
@@ -1650,7 +1651,10 @@ export class AirPumpComponent extends SimComponent {
   }
 
   public getPowerMode(): AirPumpPowerMode {
-    return this.params.powerMode === 'external_24v' ? 'external_24v' : 'fixed_power';
+    const raw = this.params.powerMode;
+    if (raw === 'external_24v') return 'external_24v';
+    if (raw === 'fixed_power') return 'fixed_power';
+    return 'ac_230v_direct';
   }
 
   public getNominalLpm(): number {
@@ -1659,16 +1663,28 @@ export class AirPumpComponent extends SimComponent {
 
   public getPorts(): PortDefinition[] {
     const ports: PortDefinition[] = [];
-    if (this.getPowerMode() === 'external_24v') {
+    const mode = this.getPowerMode();
+    if (mode === 'ac_230v_direct') {
       ports.push({
-        id: 'a1',
-        label: 'A1 (+24V)',
-        description: 'Externes +24V Steuersignal (z. B. von Relais / Schalter)',
+        id: 'l_230v',
+        label: 'L (230V~)',
+        description: '230V AC Direktanschluss L (N/PE fest im Schaltplan)',
         domain: 'electrical',
         direction: 'input',
         side: 'left',
         offsetX: 0,
-        offsetY: 56,
+        offsetY: 58,
+      });
+    } else if (mode === 'external_24v') {
+      ports.push({
+        id: 'a1',
+        label: 'A1 (+24V)',
+        description: '24V Steuersignal für 230V-Koppelrelais',
+        domain: 'electrical',
+        direction: 'input',
+        side: 'left',
+        offsetX: 0,
+        offsetY: 58,
       });
     }
     ports.push({
@@ -1679,7 +1695,7 @@ export class AirPumpComponent extends SimComponent {
       direction: 'output',
       side: 'right',
       offsetX: this.width,
-      offsetY: 74,
+      offsetY: 76,
     });
     return ports;
   }
@@ -1690,8 +1706,13 @@ export class AirPumpComponent extends SimComponent {
 
   public getElectricalLoadAmps(): number {
     if (this.fault === 'short_circuit') return 25.0;
-    if (this.getPowerMode() === 'external_24v' && this.runtimeState.running) {
-      return AIR_PUMP_MODELS[this.getModel()].watts / 24;
+    const mode = this.getPowerMode();
+    if (!this.runtimeState.running) return 0;
+    if (mode === 'ac_230v_direct') {
+      return AIR_PUMP_MODELS[this.getModel()].watts / 230;
+    }
+    if (mode === 'external_24v') {
+      return 0.08; // Relaisspulenstrom 24V
     }
     return 0;
   }
@@ -1703,16 +1724,40 @@ export class AirPumpComponent extends SimComponent {
     if (this.fault === 'power_failure' || this.fault === 'short_circuit') {
       this.runtimeState.running = false;
       this.runtimeState.externalSignal = false;
+      this.runtimeState.wrongVoltage = false;
       this.runtimeState.airFlowLpm = 0;
       return new Map();
     }
 
     const mode = this.getPowerMode();
     const enabled = Boolean(this.params.enabled ?? true);
-    const extOn = Boolean(inputs.get('a1')?.energized);
-    this.runtimeState.externalSignal = extOn;
 
-    const running = mode === 'fixed_power' ? enabled : enabled && extOn;
+    if (mode === 'ac_230v_direct') {
+      const sigL = inputs.get('l_230v');
+      const has230V = Boolean(sigL?.energized && (sigL.voltage ?? 0) >= 100);
+      const wrongVolt = Boolean(sigL?.energized && (sigL.voltage ?? 0) < 100);
+      this.runtimeState.externalSignal = has230V;
+      this.runtimeState.wrongVoltage = wrongVolt;
+      const running = enabled && has230V;
+      this.runtimeState.running = running;
+      this.runtimeState.airFlowLpm = running ? this.getNominalLpm() : 0;
+      return new Map();
+    }
+
+    if (mode === 'external_24v') {
+      const extOn = Boolean(inputs.get('a1')?.energized);
+      this.runtimeState.externalSignal = extOn;
+      this.runtimeState.wrongVoltage = false;
+      const running = enabled && extOn;
+      this.runtimeState.running = running;
+      this.runtimeState.airFlowLpm = running ? this.getNominalLpm() : 0;
+      return new Map();
+    }
+
+    // fixed_power (Steckernetzteil / immer ein)
+    this.runtimeState.externalSignal = false;
+    this.runtimeState.wrongVoltage = false;
+    const running = enabled;
     this.runtimeState.running = running;
     this.runtimeState.airFlowLpm = running ? this.getNominalLpm() : 0;
     return new Map();
@@ -1728,6 +1773,7 @@ export class AirPumpComponent extends SimComponent {
     this.runtimeState = {
       running,
       externalSignal: false,
+      wrongVoltage: false,
       airFlowLpm: running ? this.getNominalLpm() : 0,
     };
   }

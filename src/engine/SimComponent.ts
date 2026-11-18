@@ -21,6 +21,12 @@ export const HIGH_24V: ElectricalSignal = {
   energized: true,
 };
 
+export const HIGH_230V: ElectricalSignal = {
+  domain: 'electrical',
+  voltage: 230,
+  energized: true,
+};
+
 export const ZERO_ANALOG_MA: AnalogSignal = {
   domain: 'analog',
   value: 4,

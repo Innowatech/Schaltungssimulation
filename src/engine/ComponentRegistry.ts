@@ -17,6 +17,7 @@ import {
 import {
   ChangeoverSwitchComponent,
   IndicatorLampComponent,
+  PowerSupply230V,
   PowerSupply24V,
   SwitchComponent,
 } from './components/PowerAndSwitch';
@@ -81,13 +82,26 @@ ComponentRegistry.register(
   {
     type: 'power_24v',
     name: 'Spannungsquelle 24V DC',
-    shortDescription: 'Versorgt Steuerstromkreise mit +24V DC',
+    shortDescription: 'Versorgt Steuerstromkreise mit +24V DC (mit Ein/Aus-Schalter)',
     category: 'electric',
     width: 160,
     height: 96,
     defaultLabelPrefix: 'G1 24V DC',
   },
   (id, label, x, y) => new PowerSupply24V(id, label, x, y)
+);
+
+ComponentRegistry.register(
+  {
+    type: 'power_230v',
+    name: 'Einspeisung 230V AC (L/N/PE)',
+    shortDescription: '230V Netzanschluss L/N/PE mit Schalter (z. B. für Luftpumpen)',
+    category: 'electric',
+    width: 176,
+    height: 104,
+    defaultLabelPrefix: 'Q1 230V L/N/PE',
+  },
+  (id, label, x, y) => new PowerSupply230V(id, label, x, y)
 );
 
 ComponentRegistry.register(
@@ -265,7 +279,7 @@ ComponentRegistry.register(
   {
     type: 'katholyte_tank',
     name: 'Katholyte-Tank (Grün)',
-    shortDescription: 'Katholyt-Behälter inkl. Belüftungsanschluss, Lanze & 0–4 Sauglanzen',
+    shortDescription: 'Katholyte-Behälter inkl. Belüftungsanschluss, Lanze & 0–4 Sauglanzen',
     category: 'fluid',
     width: 224,
     height: 264,
@@ -293,7 +307,7 @@ ComponentRegistry.register(
   {
     type: 'generator',
     name: 'Erzeuger-Anlage',
-    shortDescription: 'Produziert Anolyt (Gelb) & Katholyt (Grün) getrennt + Hand-Stopp',
+    shortDescription: 'Produziert Anolyt (Gelb) & Katholyte (Grün) getrennt + Hand-Stopp',
     category: 'fluid',
     width: 216,
     height: 176,
@@ -306,10 +320,10 @@ ComponentRegistry.register(
   {
     type: 'air_pump',
     name: 'Luftpumpe (AquaForte V-Serie)',
-    shortDescription: 'Sprudelpumpe V-10/20/30/60 zur Tank-Belüftung (Festanschluss oder 24V)',
+    shortDescription: 'Sprudelpumpe V-10/20/30/60 (230V L/N/PE Direkt oder 24V-Koppelrelais)',
     category: 'fluid',
-    width: 204,
-    height: 138,
+    width: 208,
+    height: 144,
     defaultLabelPrefix: 'AP1 Luftpumpe',
   },
   (id, label, x, y) => new AirPumpComponent(id, label, x, y)
@@ -410,7 +424,7 @@ ComponentRegistry.register(
   {
     type: 'gully_drain',
     name: 'Gulli / Ablauf',
-    shortDescription: 'Verwurf-Ablauf für Katholyt-Bypass oder Tank-Entleerung',
+    shortDescription: 'Verwurf-Ablauf für Katholyte-Bypass oder Tank-Entleerung',
     category: 'fluid',
     width: 164,
     height: 112,

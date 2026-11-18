@@ -34,6 +34,15 @@ function renderMiniSchematic(type: string): React.ReactNode {
           </text>
         </svg>
       );
+    case 'power_230v':
+      return (
+        <svg viewBox="0 0 36 28" className="w-9 h-7 shrink-0">
+          <rect x="2" y="4" width="32" height="20" rx="3" fill="#162133" stroke="#F97316" strokeWidth="1.6" />
+          <text x="18" y="16.5" textAnchor="middle" fill="#FB923C" fontSize="7.5" fontFamily="monospace" fontWeight="700">
+            230V~
+          </text>
+        </svg>
+      );
     case 'terminal_block':
       return (
         <svg viewBox="0 0 36 28" className="w-9 h-7 shrink-0">
@@ -191,15 +200,15 @@ function renderMiniSchematic(type: string): React.ReactNode {
     case 'main_water_line':
       return (
         <svg viewBox="0 0 36 28" className="w-9 h-7 shrink-0">
-          <line x1="3" y1="14" x2="33" y2="14" stroke="#38BDF8" strokeWidth="3.2" />
-          <polygon points="16,9 24,14 16,19" fill="#E0F2FE" />
+          <line x1="3" y1="14" x2="33" y2="14" stroke="#2563EB" strokeWidth="3.2" />
+          <polygon points="16,9 24,14 16,19" fill="#93C5FD" />
         </svg>
       );
     case 'water_meter':
       return (
         <svg viewBox="0 0 36 28" className="w-9 h-7 shrink-0">
-          <circle cx="18" cy="14" r="9" fill="#162133" stroke="#38BDF8" strokeWidth="1.5" />
-          <text x="18" y="16.5" textAnchor="middle" fill="#7DD3FC" fontSize="7" fontFamily="monospace" fontWeight="700">
+          <circle cx="18" cy="14" r="9" fill="#162133" stroke="#2563EB" strokeWidth="1.5" />
+          <text x="18" y="16.5" textAnchor="middle" fill="#60A5FA" fontSize="7" fontFamily="monospace" fontWeight="700">
             m³
           </text>
         </svg>
@@ -207,7 +216,7 @@ function renderMiniSchematic(type: string): React.ReactNode {
     case 'injection_point':
       return (
         <svg viewBox="0 0 36 28" className="w-9 h-7 shrink-0">
-          <line x1="4" y1="12" x2="32" y2="12" stroke="#38BDF8" strokeWidth="2.5" />
+          <line x1="4" y1="12" x2="32" y2="12" stroke="#2563EB" strokeWidth="2.5" />
           <line x1="18" y1="24" x2="18" y2="12" stroke="#10B981" strokeWidth="2" />
           <circle cx="18" cy="12" r="2.8" fill="#FBBF24" />
         </svg>
@@ -366,15 +375,19 @@ export const ComponentLibrary: React.FC<ComponentLibraryProps> = ({
       <div className="px-4 py-2.5 border-t border-[#223044] bg-[#0B111A]/60 text-[11px] text-slate-400 space-y-1">
         <div className="flex items-center gap-2">
           <span className="inline-block w-2.5 h-0.5 bg-red-500" />
-          <span>24V DC aktiv / Grau = 0V</span>
+          <span>24V DC ·</span>
+          <span className="inline-block w-2.5 h-0.5 bg-orange-500" />
+          <span>230V AC</span>
         </div>
         <div className="flex items-center gap-2">
           <span className="inline-block w-2.5 h-1 bg-yellow-400 rounded-xs" />
-          <span>Anolyt (Gelb) · Wasser (Blau)</span>
+          <span>Anolyt (Gelb) ·</span>
+          <span className="inline-block w-2.5 h-1 bg-blue-600 rounded-xs" />
+          <span>Wasser (Blau)</span>
         </div>
         <div className="flex items-center gap-2">
           <span className="inline-block w-2.5 h-0.5 bg-emerald-400" />
-          <span>Katholyt (Grün) / 4–20mA</span>
+          <span>Katholyte (Grün) / 4–20mA</span>
         </div>
         <div className="flex items-center gap-2">
           <span className="inline-block w-2.5 h-0.5 bg-cyan-400" />

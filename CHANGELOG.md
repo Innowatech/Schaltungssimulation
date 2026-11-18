@@ -1,15 +1,24 @@
 # Changelog — AnlagenSim (Mechatronik & Fluidik Baukasten)
 
-Alle Änderungen an diesem Projekt werden fortlaufend mit den Versionsnummern `1.0` bis `1.17` usw. dokumentiert.
+Alle Änderungen an diesem Projekt werden fortlaufend mit den Versionsnummern `1.0` bis `1.18` usw. dokumentiert.
 
-## [1.17] — Aktuelle Version
+## [1.18] — Aktuelle Version
+### Hinzugefügt & Verbessert
+- **Modularer Anlagenbau-Schaltplan (PDF)**: Im Zahnrad-Menü generierbares DIN-A4-Querformat-PDF mit vier einzeln abwählbaren Abschnitten (Deckblatt/BOM, normnaher Stromlaufplan 230V/24V inkl. automatischer `0V`-Sammelschiene, `N`/`PE` & `24V→230V`-Koppelrelais, Klemmenplan/Hakenliste und Fluidik-R&I). Prüft zusätzlich alte JSONs (z. B. `A2` auf `+24V`) und korrigiert sie sicher auf `0V`.
+- **Eigenständige HTML-Prozessanimation (`.html`)**: Exportiert eine offlinefähige Animationsdatei (wählbar `24h`, `48h`, `72h` oder frei, Endlos-Schleife standardmäßig aktiv) ohne Kabel/Klemmen mit Zeitregler, Live-Ticker und Log-Drawer.
+- **In-App Ansichts-Umschalter (`Schaltplan` | `Animation`)**: Sauberer Prozessmodus ohne Klemmen und elektrische Leitungen (Zeitrelais bleiben sichtbar) mit schwebendem Live-Ablauf-Ticker.
+- **230V AC Einspeisung (L/N/PE) in kräftigem Orange**: Neues Bauteil `Q1 230V L/N/PE` mit Schalter; Luftpumpen unterstützen nun `230V AC Direktanschluss` (Standard) sowie `24V Koppelrelais` und `Steckernetzteil`.
+- **Kräftigere Sprudelblasen & Wellenoberfläche + Tiefblau für Wasser**: Animierte Wellenoberfläche und 11 kräftigere Luftblasen bei belüfteten Tanks; `Wasser` ist jetzt tiefes Blau zur klaren Trennung von Cyan-`Druckluft`.
+- **Stillstand beim Laden**: Geladene JSON-Dateien und gespeicherte Pläne stehen zunächst auf Pause (`Start` startet den Ablauf).
+
+## [1.17]
 ### Hinzugefügt & Verbessert
 - **Kopfleiste („AnlagenSim“) & Zahnrad-Menü**: Titel gekürzt; gespeicherte Pläne direkt aus der Liste löschen oder laden, JSON-Import/-Export, PDF-Plan, Hell/Dunkel-Design, Ansicht zentrieren und App-Installation im neuen Zahnrad-Menü gebündelt.
 - **Offline-Hinweis & Copyright**: Kompakter `Offline`-Badge neben `Copyright © 2026 #MAT` unten rechts (überdeckt nicht mehr die Zoom-Buttons).
 - **Tank-Startfüllstand bei Reset & Zeitraffer-Fix**: Konfigurierbarer Startfüllstand für Reset (Standard `0%`), und die CSS-Höhenverzögerung wurde entfernt, damit sich die Tank-Visualisierung auch bei maximalem Zeitraffer absolut flüssig mit den Litern bewegt.
 - **Große grüne Signalleuchten**: Alle schaltenden und elektrisch angesteuerten Bausteine zeigen nun eine helle, deutlich sichtbare grüne Status-LED.
 - **Neue Bauteile**: **Leuchtmelder (Grün / Rot)** mit `+24V`-Eingang, **Wechselschalter (11 → 12/14)** sowie **AquaForte V-Serie Luftpumpe (`V-10`, `V-20`, `V-30`, `V-60`)** mit Cyan-Luftschlauch und animierter Sprudel-Belüftung im Tank.
-- **Medium-Farbschema aktualisiert**: **Anolyt = Gelb**, **Katholyt = Grün**, **Wasser = Blau**, **Druckluft = Cyan**.
+- **Medium-Farbschema aktualisiert**: **Anolyt = Gelb**, **Katholyte = Grün**, **Wasser = Blau**, **Druckluft = Cyan**.
 
 ## [1.16]
 ### Hinzugefügt & Verbessert

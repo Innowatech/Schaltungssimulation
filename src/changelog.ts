@@ -5,9 +5,22 @@ export interface ChangelogEntry {
   changes: string[];
 }
 
-export const CURRENT_VERSION = '1.17';
+export const CURRENT_VERSION = '1.18';
 
 export const CHANGELOG_ENTRIES: ChangelogEntry[] = [
+  {
+    version: '1.18',
+    title: 'Anlagenbau-Schaltplan (PDF), HTML-Animation, Prozessmodus, 230V AC (Orange) & Tank-Wellenschlag',
+    date: '2026-11-18',
+    changes: [
+      'Modularer Anlagenbau-Schaltplan (PDF): Export im DIN-A4-Querformat mit einzeln abwählbaren Kapiteln (1. Deckblatt/Stückliste/Sollwerte, 2. Normnaher Stromlaufplan 230V/24V inkl. 0V-Sammelschiene & Koppelrelais, 3. Klemmenplan & Ader-Hakenliste, 4. Fluidik-/Pneumatik-R&I) zum direkten 1:1-Nachbau.',
+      'Eigenständige HTML-Prozessanimation (.html): Exportiert eine interaktive, offlinefähige HTML-Animation für 24h / 48h / 72h (Endlos-Schleife standardmäßig EIN) ohne Klemmen & Kabel — inkl. Zeitregler, Tempo-Wahl & Ablauf-Log.',
+      'Live-Animationsmodus in der App („Schaltplan | Animation“): Blendet Kabel, Klemmen & Schaltschrank-Hilfsblöcke aus, lässt Zeitrelais & Prozesse live laufen und zeigt Schaltkommentare im integrierten Ablauf-Ticker.',
+      '230V AC Einspeisung (L/N/PE) in kräftigem Orange: Neues Netzanschluss-Bauteil sowie Wahl bei Luftpumpen zwischen 230V Direktanschluss (L/N/PE) und 24V-Steuersignal (im PDF automatisch mit 24V→230V Koppelrelais).',
+      'Kräftigere Tank-Belüftung & Wellenbewegung: Mehr Sprudelblasen + animierte Flüssigkeitsoberfläche bei laufender Luftpumpe; Wasser-Medienfarbe zur besseren Unterscheidung von Druckluft auf tiefes Königsblau angepasst.',
+      'Stillstand nach JSON-/Plan-Laden: Geöffnete Schaltpläne starten sauber im Pause-Zustand und laufen erst nach Druck auf „Start“.',
+    ],
+  },
   {
     version: '1.17',
     title: 'AnlagenSim Zahnrad-Menü, AquaForte Luftpumpen, Leuchtmelder, Wechselschalter & Signalleuchten',
@@ -17,8 +30,8 @@ export const CHANGELOG_ENTRIES: ChangelogEntry[] = [
       'Offline-Hinweis & Copyright: Kompakter Offline-Status sitzt nun dezent neben „Copyright © 2026 #MAT“ rechts unten ohne die Zoom-Tasten zu verdecken.',
       'Startfüllstand bei Reset & Zeitraffer-Fix: Tanks starten nach Reset auf dem konfigurierbaren Startfüllstand (Standard 0% leer) und aktualisieren die Balkenfüllung im Zeitraffer ohne Verzögerung in Echtzeit.',
       'Helle grüne Schalt-Signalleuchten: Alle schaltenden und elektrisch angesteuerten Bauteile (Schalter, Zeitrelais, Schütz, Logikgatter, Magnetventile, Pumpen, Verbraucher) zeigen nun eine große, hell leuchtende grüne Status-LED.',
-      'Neue Bauteile: Leuchtmelder (Grün/Rot) für schnelle Elektroschaltungstests, Wechselschalter (11 → 12/14) sowie AquaForte V-Serie Luftpumpe (V-10, V-20, V-30, V-60 nach Handbuch) mit Druckluftschlauch und animierten Sprudelblasen im Tank (Standard für Katholyt-Tanks).',
-      'Neue Mediumfarben: Anolyt = Gelb, Katholyt = Grün, Wasser = Blau, Druckluft = Cyan.',
+      'Neue Bauteile: Leuchtmelder (Grün/Rot) für schnelle Elektroschaltungstests, Wechselschalter (11 → 12/14) sowie AquaForte V-Serie Luftpumpe (V-10, V-20, V-30, V-60 nach Handbuch) mit Druckluftschlauch und animierten Sprudelblasen im Tank (Standard für Katholyte-Tanks).',
+      'Neue Mediumfarben: Anolyt = Gelb, Katholyte = Grün, Wasser = Blau, Druckluft = Cyan.',
     ],
   },
   {

@@ -17,6 +17,7 @@ import {
 } from './components/FluidComponents';
 import {
   ChangeoverSwitchComponent,
+  PowerSupply230V,
   PowerSupply24V,
   SwitchComponent,
 } from './components/PowerAndSwitch';
@@ -447,7 +448,7 @@ export class SimulationEngine {
     );
 
     for (const comp of this.components.values()) {
-      if (!(comp instanceof PowerSupply24V)) continue;
+      if (!(comp instanceof PowerSupply24V) && !(comp instanceof PowerSupply230V)) continue;
       if (!Boolean(comp.params.enabled ?? true) || comp.fault === 'power_failure') continue;
       if (comp.fault === 'short_circuit') {
         shortedSupplies.add(comp.id);
@@ -540,7 +541,7 @@ export class SimulationEngine {
   }
 
   private isPathConductingThroughComponent(comp: SimComponent, outputPortId: string): boolean {
-    if (comp instanceof PowerSupply24V) {
+    if (comp instanceof PowerSupply24V || comp instanceof PowerSupply230V) {
       return Boolean(comp.params.enabled ?? true) && comp.fault !== 'power_failure';
     }
     if (comp instanceof TerminalBlockComponent) {
@@ -1188,7 +1189,7 @@ export class SimulationEngine {
       return false;
     };
 
-    // 1. Erzeuger-Anlagen (Anolyt primär, Katholyt nebenrangig)
+    // 1. Erzeuger-Anlagen (Anolyt primär, Katholyte nebenrangig)
     for (const comp of this.components.values()) {
       if (!(comp instanceof GeneratorComponent)) continue;
 
@@ -1221,7 +1222,7 @@ export class SimulationEngine {
         }
       }
 
-      // Katholyt-Strang (Grün) — läuft nebenrangig solange Anlage produziert & Ausgangspfad frei (Tank o. Gulli)
+      // Katholyte-Strang (Grün) — läuft nebenrangig solange Anlage produziert & Ausgangspfad frei (Tank o. Gulli)
       const katTraces = traceDownstream(comp.id, 'fluid_katholyte');
       const activeKat = katTraces.filter(isTraceAccepting);
       let producedKat = 0;

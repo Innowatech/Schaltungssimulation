@@ -15,6 +15,7 @@ import { OfflineIndicator } from './OfflineIndicator';
 
 interface WorkbenchCanvasProps {
   theme: 'dark' | 'light';
+  viewMode?: 'schematic' | 'animation';
   components: SimComponent[];
   connections: Connection[];
   selectedComponentId: string | null;
@@ -42,6 +43,7 @@ const DRAG_THRESHOLD_PX = 5;
 
 export const WorkbenchCanvas: React.FC<WorkbenchCanvasProps> = ({
   theme,
+  viewMode = 'schematic',
   components,
   connections,
   selectedComponentId,
@@ -424,27 +426,40 @@ export const WorkbenchCanvas: React.FC<WorkbenchCanvasProps> = ({
     };
   };
 
+  const isAnimationMode = viewMode === 'animation';
+
+  const visibleComponents = useMemo(() => {
+    if (!isAnimationMode) return components;
+    const hiddenTypes = new Set(['power_24v', 'power_230v', 'terminal_block', 'contactor_relay']);
+    return components.filter((c) => !hiddenTypes.has(c.type));
+  }, [components, isAnimationMode]);
+
+  const visibleConnections = useMemo(() => {
+    if (!isAnimationMode) return connections;
+    return connections.filter((c) => c.domain === 'fluid' || c.domain === 'air');
+  }, [connections, isAnimationMode]);
+
   const compMap = useMemo(
-    () => new Map(components.map((c) => [c.id, c])),
-    [components]
+    () => new Map(visibleComponents.map((c) => [c.id, c])),
+    [visibleComponents]
   );
 
   const obstacles = useMemo<ComponentObstacle[]>(
     () =>
-      components.map((c) => ({
+      visibleComponents.map((c) => ({
         id: c.id,
         x: c.x,
         y: c.y,
         width: c.width,
         height: c.height,
       })),
-    [components]
+    [visibleComponents]
   );
 
   // Berechne alle hindernis-freien rechtwinkligen Leitungen + Option-C-Kreuzungen
   const routedWires = useMemo(() => {
     const endpoints: RouteEndpoint[] = [];
-    for (const conn of connections) {
+    for (const conn of visibleConnections) {
       const fromComp = compMap.get(conn.fromComponentId);
       const toComp = compMap.get(conn.toComponentId);
       if (!fromComp || !toComp) continue;
@@ -466,14 +481,14 @@ export const WorkbenchCanvas: React.FC<WorkbenchCanvasProps> = ({
       });
     }
     return routeAllOrthogonalWires(endpoints, obstacles);
-  }, [compMap, connections, obstacles]);
+  }, [compMap, visibleConnections, obstacles]);
 
   // Sortiere Render-Reihenfolge: Fluidrohre & Luftschläuche unten, dann Analog & Elektrik mit Brückenbögen drüber
   const orderedConnections = useMemo(() => {
-    const fluidsAndAir = connections.filter((c) => c.domain === 'fluid' || c.domain === 'air');
-    const signals = connections.filter((c) => c.domain !== 'fluid' && c.domain !== 'air');
+    const fluidsAndAir = visibleConnections.filter((c) => c.domain === 'fluid' || c.domain === 'air');
+    const signals = visibleConnections.filter((c) => c.domain !== 'fluid' && c.domain !== 'air');
     return [...fluidsAndAir, ...signals];
-  }, [connections]);
+  }, [visibleConnections]);
 
   let previewPath: string | null = null;
   if (pendingWire) {
@@ -658,6 +673,12 @@ export const WorkbenchCanvas: React.FC<WorkbenchCanvasProps> = ({
 
             if (conn.domain === 'electrical') {
               const energized = conn.active;
+              const is230V =
+                (conn.voltage ?? 0) >= 100 ||
+                conn.fromPortId === 'out_230v' ||
+                conn.toPortId === 'l_230v';
+              const activeStroke = is230V ? '#F97316' : '#EF4444';
+              const pulseStroke = is230V ? '#FED7AA' : '#FCA5A5';
               return (
                 <g
                   key={conn.id}
@@ -676,8 +697,8 @@ export const WorkbenchCanvas: React.FC<WorkbenchCanvasProps> = ({
                     <path
                       d={d}
                       fill="none"
-                      stroke="#EF4444"
-                      strokeOpacity={0.26}
+                      stroke={activeStroke}
+                      strokeOpacity={0.28}
                       strokeWidth={7.5}
                       strokeLinecap="round"
                       strokeLinejoin="round"
@@ -691,11 +712,15 @@ export const WorkbenchCanvas: React.FC<WorkbenchCanvasProps> = ({
                       isSelected
                         ? '#F59E0B'
                         : energized
-                        ? '#EF4444'
+                        ? activeStroke
                         : isHovered
                         ? isLight
                           ? '#475569'
                           : '#94A3B8'
+                        : is230V
+                        ? isLight
+                          ? '#FB923C'
+                          : '#7C2D12'
                         : isLight
                         ? '#94A3B8'
                         : '#475569'
@@ -709,12 +734,39 @@ export const WorkbenchCanvas: React.FC<WorkbenchCanvasProps> = ({
                     <path
                       d={d}
                       fill="none"
-                      stroke="#FCA5A5"
+                      stroke={pulseStroke}
                       strokeWidth={1.6}
                       strokeDasharray="4 20"
                       strokeLinejoin="round"
                       className="animate-electric-pulse pointer-events-none"
                     />
+                  )}
+
+                  {is230V && (energized || isSelected || isHovered) && (
+                    <g transform={`translate(${midX}, ${midY})`} className="pointer-events-none">
+                      <rect
+                        x="-22"
+                        y="-9"
+                        width="44"
+                        height="16"
+                        rx="4"
+                        fill={labelBgColor}
+                        fillOpacity={0.94}
+                        stroke={energized ? '#F97316' : isLight ? '#CBD5E1' : '#334155'}
+                        strokeWidth="1"
+                      />
+                      <text
+                        x="0"
+                        y="2"
+                        textAnchor="middle"
+                        fill={energized ? (isLight ? '#C2410C' : '#FB923C') : isLight ? '#475569' : '#94A3B8'}
+                        fontSize="8.5"
+                        fontFamily="monospace"
+                        fontWeight="700"
+                      >
+                        230V~
+                      </text>
+                    </g>
                   )}
                 </g>
               );
@@ -899,15 +951,15 @@ export const WorkbenchCanvas: React.FC<WorkbenchCanvasProps> = ({
               );
             }
 
-            // Fluid-Rohrleitung (Anolyt = Gelb, Katholyt = Grün, Wasser = Blau) + Option-C Unterbrechungslücke
+            // Fluid-Rohrleitung (Anolyt = Gelb, Katholyte = Grün, Wasser = Kräftiges Blau) + Option-C Unterbrechungslücke
             const flowLph = conn.flowRateLph ?? 0;
             const flowing = conn.active && flowLph > 0;
             const isKat = conn.medium === 'katholyte';
             const isAno = conn.medium === 'anolyte';
-            const baseColor = isKat ? '#10B981' : isAno ? '#EAB308' : '#0EA5E9';
-            const pulseColor = isKat ? '#A7F3D0' : isAno ? '#FEF08A' : '#BAE6FD';
-            const textColor = isKat ? '#6EE7B7' : isAno ? '#FDE047' : '#7DD3FC';
-            const lightTextColor = isKat ? '#047857' : isAno ? '#A16207' : '#0369A1';
+            const baseColor = isKat ? '#10B981' : isAno ? '#EAB308' : '#1D4ED8';
+            const pulseColor = isKat ? '#A7F3D0' : isAno ? '#FEF08A' : '#93C5FD';
+            const textColor = isKat ? '#6EE7B7' : isAno ? '#FDE047' : '#60A5FA';
+            const lightTextColor = isKat ? '#047857' : isAno ? '#A16207' : '#1E40AF';
 
             return (
               <g
@@ -1042,7 +1094,7 @@ export const WorkbenchCanvas: React.FC<WorkbenchCanvasProps> = ({
                   ? '#34D399'
                   : pendingWire.domain === 'air'
                   ? '#22D3EE'
-                  : '#38BDF8'
+                  : '#2563EB'
               }
               strokeWidth={pendingWire.domain === 'fluid' ? 4 : pendingWire.domain === 'air' ? 3 : 2.5}
               strokeDasharray="6 6"
@@ -1052,13 +1104,14 @@ export const WorkbenchCanvas: React.FC<WorkbenchCanvasProps> = ({
         </svg>
 
         <div className="relative z-10 pointer-events-auto">
-          {components.map((comp) => (
+          {visibleComponents.map((comp) => (
             <ComponentNode
               key={comp.id}
               component={comp}
-              allComponents={components}
+              allComponents={visibleComponents}
               isSelected={selectedComponentId === comp.id}
-              pendingWire={pendingWire}
+              hideTerminals={isAnimationMode}
+              pendingWire={isAnimationMode ? null : pendingWire}
               onStartDrag={handleStartDragComponent}
               onSelect={(id) => {
                 onSelectConnection(null);

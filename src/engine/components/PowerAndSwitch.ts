@@ -73,6 +73,72 @@ export class PowerSupply24V extends SimComponent {
   }
 }
 
+export class PowerSupply230V extends SimComponent {
+  public readonly type = 'power_230v';
+  public readonly category: ComponentCategory = 'electric';
+  public readonly width = 176;
+  public readonly height = 104;
+
+  constructor(id: string, label = 'Q1 230V AC (L/N/PE)', x = 0, y = 0) {
+    super(id, label, x, y);
+    this.params = {
+      enabled: true,
+      voltage: 230,
+    };
+    this.runtimeState = {
+      active: true,
+      trippedShortCircuit: false,
+    };
+  }
+
+  public getPorts(): PortDefinition[] {
+    return [
+      {
+        id: 'out_230v',
+        label: 'L (230V~)',
+        description: '230V AC Phase L (Versorgung über L / N / PE)',
+        domain: 'electrical',
+        direction: 'output',
+        side: 'right',
+        offsetX: this.width,
+        offsetY: 58,
+      },
+    ];
+  }
+
+  public getSupportedFaults(): ComponentFaultType[] {
+    return ['power_failure', 'short_circuit'];
+  }
+
+  public evaluateElectrical(
+    _inputs: Map<string, ElectricalSignal>,
+    context: SimulationContext
+  ): Map<string, ElectricalSignal> {
+    const enabled = Boolean(this.params.enabled ?? true);
+    const voltage = Number(this.params.voltage ?? 230);
+    const downstreamShort = Boolean(context.isSupplyShortCircuited?.(this.id));
+    const powerFailed = this.fault === 'power_failure';
+    const selfShort = this.fault === 'short_circuit';
+
+    const tripped = downstreamShort || selfShort;
+    const active = enabled && !powerFailed && !tripped;
+
+    this.runtimeState.active = active;
+    this.runtimeState.trippedShortCircuit = tripped;
+
+    const outputs = new Map<string, ElectricalSignal>();
+    outputs.set(
+      'out_230v',
+      active ? { domain: 'electrical', voltage, energized: true } : ZERO_VOLT
+    );
+    return outputs;
+  }
+
+  public togglePower(): void {
+    this.params.enabled = !Boolean(this.params.enabled ?? true);
+  }
+}
+
 export type SwitchMode = 'toggle' | 'momentary_no' | 'momentary_nc';
 
 export class SwitchComponent extends SimComponent {

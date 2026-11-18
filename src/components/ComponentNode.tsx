@@ -20,6 +20,7 @@ import {
 import {
   ChangeoverSwitchComponent,
   IndicatorLampComponent,
+  PowerSupply230V,
   PowerSupply24V,
   SwitchComponent,
 } from '../engine/components/PowerAndSwitch';
@@ -53,6 +54,7 @@ interface ComponentNodeProps {
   component: SimComponent;
   allComponents: SimComponent[];
   isSelected: boolean;
+  hideTerminals?: boolean;
   pendingWire: PendingWireStart | null;
   onStartDrag: (e: React.PointerEvent, componentId: string) => void;
   onSelect: (componentId: string) => void;
@@ -95,6 +97,10 @@ function getHeaderGreenLedState(component: SimComponent): {
   if (component instanceof PowerSupply24V) {
     const on = Boolean(component.runtimeState.active);
     return { show: true, on, title: on ? '24V Ausgang aktiv' : '24V Ausgang aus' };
+  }
+  if (component instanceof PowerSupply230V) {
+    const on = Boolean(component.runtimeState.active);
+    return { show: true, on, title: on ? '230V~ L/N/PE aktiv' : '230V~ L/N/PE aus' };
   }
   if (component instanceof TerminalBlockComponent) {
     const on = Boolean(component.runtimeState.inputEnergized);
@@ -181,6 +187,7 @@ export const ComponentNode: React.FC<ComponentNodeProps> = ({
   component,
   allComponents,
   isSelected,
+  hideTerminals = false,
   pendingWire,
   onStartDrag,
   onSelect,
@@ -235,6 +242,52 @@ export const ComponentNode: React.FC<ComponentNodeProps> = ({
               : component.fault === 'power_failure'
               ? 'Versorgung ausgefallen'
               : 'Gleichspannung DC'}
+          </div>
+        </div>
+      );
+    }
+
+    // 1b. Spannungsquelle 230V AC (L/N/PE)
+    if (component instanceof PowerSupply230V) {
+      const enabled = Boolean(component.params.enabled ?? true);
+      const active = Boolean(component.runtimeState.active);
+      const tripped = Boolean(component.runtimeState.trippedShortCircuit);
+      return (
+        <div className="px-3 py-2 flex flex-col justify-between h-[calc(100%-28px)]">
+          <div className="flex items-center justify-between gap-2">
+            <span
+              className={`font-mono text-base font-bold ${
+                tripped ? 'text-red-400' : active ? 'text-orange-300' : 'text-slate-500'
+              }`}
+            >
+              {active ? '230 V~' : '0 V~'}
+            </span>
+            <button
+              type="button"
+              onPointerDown={stopDrag}
+              onClick={(e) => {
+                e.stopPropagation();
+                component.togglePower();
+                onMutateComponent();
+              }}
+              className={`px-2.5 py-1 rounded text-[11px] font-semibold border transition-colors cursor-pointer ${
+                enabled
+                  ? 'bg-orange-500/20 text-orange-300 border-orange-500/60 hover:bg-orange-500/30'
+                  : 'bg-slate-800 text-slate-400 border-slate-600 hover:text-slate-200'
+              }`}
+            >
+              {enabled ? 'EIN' : 'AUS'}
+            </button>
+          </div>
+          <div className="flex items-center justify-between text-[10px]">
+            <span className="font-mono font-semibold text-orange-300/90">L / N / PE</span>
+            <span className="text-slate-400 truncate">
+              {tripped
+                ? 'KURZSCHLUSS'
+                : component.fault === 'power_failure'
+                ? 'Netzausfall'
+                : 'Netz 230V AC'}
+            </span>
           </div>
         </div>
       );
@@ -689,22 +742,24 @@ export const ComponentNode: React.FC<ComponentNodeProps> = ({
       const liquidClass = isKat
         ? 'bg-gradient-to-t from-emerald-700/85 to-emerald-400/75'
         : isWater
-        ? 'bg-gradient-to-t from-sky-700/85 to-sky-400/75'
+        ? 'bg-gradient-to-t from-blue-900/95 to-blue-600/85'
         : 'bg-gradient-to-t from-yellow-600/85 to-yellow-400/80';
 
       const surfaceLineClass = isKat
         ? 'bg-emerald-200/80'
         : isWater
-        ? 'bg-sky-200/80'
+        ? 'bg-blue-300/85'
         : 'bg-yellow-200/90';
+
+      const waveFill = isKat ? '#34D399' : isWater ? '#3B82F6' : '#FACC15';
 
       const mediumBadgeClass = isKat
         ? 'bg-emerald-500/15 text-emerald-300 border-emerald-500/40'
         : isWater
-        ? 'bg-sky-500/15 text-sky-300 border-sky-500/40'
+        ? 'bg-blue-600/20 text-blue-300 border-blue-500/45'
         : 'bg-yellow-500/15 text-yellow-300 border-yellow-500/40';
 
-      const mediumLabel = isKat ? 'Katholyt' : isWater ? 'Wasser' : 'Anolyt';
+      const mediumLabel = isKat ? 'Katholyte' : isWater ? 'Wasser' : 'Anolyt';
 
       return (
         <div className="px-3 py-2 flex flex-col justify-between h-[calc(100%-28px)]">
@@ -722,15 +777,38 @@ export const ComponentNode: React.FC<ComponentNodeProps> = ({
               className={`absolute bottom-0 left-0 right-0 ${liquidClass}`}
               style={{ height: `${Math.max(0, Math.min(100, pct))}%` }}
             >
-              {pct > 1 && <div className={`h-[2px] w-full ${surfaceLineClass}`} />}
+              {pct > 1 && (
+                aerated ? (
+                  <div className="relative w-full h-0 pointer-events-none">
+                    <svg
+                      viewBox="0 0 240 12"
+                      preserveAspectRatio="none"
+                      className="absolute -top-[6px] left-0 w-[200%] h-[8px] animate-water-wave"
+                    >
+                      <path
+                        d="M0 6 Q15 0 30 6 T60 6 T90 6 T120 6 T150 6 T180 6 T210 6 T240 6 L240 12 L0 12 Z"
+                        fill={waveFill}
+                        fillOpacity="0.88"
+                      />
+                    </svg>
+                  </div>
+                ) : (
+                  <div className={`h-[2px] w-full ${surfaceLineClass}`} />
+                )
+              )}
               {aerated && pct > 2 && (
                 <div className="absolute inset-0 overflow-hidden pointer-events-none">
-                  <span className="animate-bubble-1 absolute bottom-1 left-[14%] w-1.5 h-1.5 rounded-full bg-cyan-100/85" />
-                  <span className="animate-bubble-2 absolute bottom-1 left-[28%] w-2 h-2 rounded-full bg-white/75" />
-                  <span className="animate-bubble-3 absolute bottom-1 left-[44%] w-1.5 h-1.5 rounded-full bg-cyan-200/85" />
-                  <span className="animate-bubble-1 absolute bottom-1 left-[60%] w-2 h-2 rounded-full bg-white/70" />
-                  <span className="animate-bubble-2 absolute bottom-1 left-[76%] w-1.5 h-1.5 rounded-full bg-cyan-100/85" />
-                  <span className="animate-bubble-3 absolute bottom-1 left-[88%] w-1.5 h-1.5 rounded-full bg-white/80" />
+                  <span className="animate-bubble-1 absolute bottom-1 left-[8%] w-2 h-2 rounded-full bg-cyan-100/90 shadow-[0_0_4px_rgba(103,232,249,0.8)]" />
+                  <span className="animate-bubble-2 absolute bottom-1 left-[16%] w-2.5 h-2.5 rounded-full bg-white/85" />
+                  <span className="animate-bubble-4 absolute bottom-1 left-[24%] w-1.5 h-1.5 rounded-full bg-cyan-200/90" />
+                  <span className="animate-bubble-3 absolute bottom-1 left-[32%] w-2 h-2 rounded-full bg-white/80" />
+                  <span className="animate-bubble-1 absolute bottom-1 left-[41%] w-2.5 h-2.5 rounded-full bg-cyan-100/90" />
+                  <span className="animate-bubble-4 absolute bottom-1 left-[50%] w-2 h-2 rounded-full bg-white/85 shadow-[0_0_4px_rgba(255,255,255,0.8)]" />
+                  <span className="animate-bubble-2 absolute bottom-1 left-[58%] w-1.5 h-1.5 rounded-full bg-cyan-200/95" />
+                  <span className="animate-bubble-3 absolute bottom-1 left-[67%] w-2.5 h-2.5 rounded-full bg-white/80" />
+                  <span className="animate-bubble-1 absolute bottom-1 left-[75%] w-2 h-2 rounded-full bg-cyan-100/90" />
+                  <span className="animate-bubble-4 absolute bottom-1 left-[83%] w-2 h-2 rounded-full bg-white/85" />
+                  <span className="animate-bubble-2 absolute bottom-1 left-[91%] w-1.5 h-1.5 rounded-full bg-cyan-200/90" />
                 </div>
               )}
             </div>
@@ -766,7 +844,7 @@ export const ComponentNode: React.FC<ComponentNodeProps> = ({
                   ? isKat
                     ? 'text-emerald-400'
                     : isWater
-                    ? 'text-sky-400'
+                    ? 'text-blue-400'
                     : 'text-yellow-400'
                   : 'text-slate-500'
               }
@@ -795,7 +873,7 @@ export const ComponentNode: React.FC<ComponentNodeProps> = ({
                 onMutateComponent();
               }}
               className={`w-full h-1.5 cursor-pointer ${
-                isKat ? 'accent-emerald-400' : isWater ? 'accent-sky-400' : 'accent-yellow-400'
+                isKat ? 'accent-emerald-400' : isWater ? 'accent-blue-500' : 'accent-yellow-400'
               }`}
             />
           </div>
@@ -856,7 +934,7 @@ export const ComponentNode: React.FC<ComponentNodeProps> = ({
       );
     }
 
-    // 11. Erzeuger-Anlage (Anolyt + Katholyt + Hand-Stopp)
+    // 11. Erzeuger-Anlage (Anolyt + Katholyte + Hand-Stopp)
     if (component instanceof GeneratorComponent) {
       const status = String(component.runtimeState.status ?? 'standby');
       const actualAno = Number(component.runtimeState.actualAnolyteLph ?? 0);
@@ -1329,6 +1407,7 @@ export const ComponentNode: React.FC<ComponentNodeProps> = ({
       const powerMode = component.getPowerMode();
       const enabled = Boolean(component.params.enabled ?? true);
       const running = Boolean(component.runtimeState.running);
+      const wrongVoltage = Boolean(component.runtimeState.wrongVoltage);
       const flowLpm = Number(component.runtimeState.airFlowLpm ?? 0);
 
       return (
@@ -1362,11 +1441,15 @@ export const ComponentNode: React.FC<ComponentNodeProps> = ({
           </div>
 
           <div className="flex items-center justify-between bg-[#0B111A] border border-[#1E2A3B] rounded px-2 py-1 font-mono text-[10px]">
-            <span className={running ? 'text-cyan-300 font-bold' : 'text-slate-500'}>
-              {running ? `${flowLpm} L/min aktiv` : '0 L/min'}
+            <span className={wrongVoltage ? 'text-amber-300 font-bold' : running ? 'text-cyan-300 font-bold' : 'text-slate-500'}>
+              {wrongVoltage ? '24V statt 230V!' : running ? `${flowLpm} L/min aktiv` : '0 L/min'}
             </span>
-            <span className="text-slate-400">
-              {powerMode === 'external_24v' ? '24V A1' : 'Feststrom'}
+            <span className={powerMode === 'ac_230v_direct' ? 'text-orange-300' : 'text-slate-400'}>
+              {powerMode === 'ac_230v_direct'
+                ? '230V L/N/PE'
+                : powerMode === 'external_24v'
+                ? '24V Relais'
+                : 'Feststrom'}
             </span>
           </div>
         </div>
@@ -1448,10 +1531,14 @@ export const ComponentNode: React.FC<ComponentNodeProps> = ({
 
       {renderBody()}
 
-      {ports.map((port) => {
+      {!hideTerminals && ports.map((port) => {
         const sig = component.portSignals.get(port.id);
-        const isElecActive =
-          port.domain === 'electrical' && sig && (sig as ElectricalSignal).energized;
+        const elecSig = port.domain === 'electrical' ? (sig as ElectricalSignal | undefined) : undefined;
+        const isElecActive = Boolean(elecSig?.energized);
+        const is230VPort =
+          port.id === 'out_230v' ||
+          port.id === 'l_230v' ||
+          Boolean(isElecActive && (elecSig?.voltage ?? 24) >= 100);
         const isAnalogActive =
           port.domain === 'analog' && sig && (sig as AnalogSignal).active;
         const isFluidActive =
@@ -1506,7 +1593,11 @@ export const ComponentNode: React.FC<ComponentNodeProps> = ({
                     ? 'scale-125 border-emerald-300 bg-emerald-500/80 shadow-[0_0_8px_rgba(52,211,153,0.9)] animate-pulse'
                     : port.domain === 'electrical'
                     ? isElecActive
-                      ? 'border-red-300 bg-red-500 shadow-[0_0_8px_rgba(239,68,68,0.85)]'
+                      ? is230VPort
+                        ? 'border-orange-300 bg-orange-500 shadow-[0_0_8px_rgba(249,115,22,0.9)]'
+                        : 'border-red-300 bg-red-500 shadow-[0_0_8px_rgba(239,68,68,0.85)]'
+                      : is230VPort
+                      ? 'border-orange-400/75 bg-[#0B111A] group-hover:border-orange-400 group-hover:scale-110'
                       : 'border-slate-400 bg-[#0B111A] group-hover:border-red-400 group-hover:scale-110'
                     : port.domain === 'analog'
                     ? isAnalogActive
@@ -1525,8 +1616,8 @@ export const ComponentNode: React.FC<ComponentNodeProps> = ({
                       ? 'border-yellow-200 bg-yellow-500 shadow-[0_0_8px_rgba(234,179,8,0.85)]'
                       : 'border-yellow-500/70 bg-[#0B111A] group-hover:border-yellow-300 group-hover:scale-110'
                     : isFluidActive
-                    ? 'border-sky-200 bg-sky-500 shadow-[0_0_8px_rgba(14,165,233,0.85)]'
-                    : 'border-sky-500/70 bg-[#0B111A] group-hover:border-sky-300 group-hover:scale-110'
+                    ? 'border-blue-200 bg-blue-600 shadow-[0_0_8px_rgba(37,99,235,0.85)]'
+                    : 'border-blue-500/75 bg-[#0B111A] group-hover:border-blue-400 group-hover:scale-110'
                 }`}
               >
                 <span className="w-1.5 h-1.5 rounded-full bg-white/80 pointer-events-none" />

@@ -1,0 +1,663 @@
+{
+  "version": 3,
+  "name": "Schaltplan",
+  "components": [
+    {
+      "id": "comp_1794950250784_vv28",
+      "type": "power_24v",
+      "label": "Netzteil 24V",
+      "x": -192,
+      "y": -464,
+      "params": {
+        "enabled": true,
+        "voltage": 24
+      },
+      "runtimeState": {
+        "active": true,
+        "trippedShortCircuit": false
+      },
+      "fault": "none"
+    },
+    {
+      "id": "comp_1794950250784_qf4n",
+      "type": "valve_32",
+      "label": "3/2- Wege Ventil",
+      "x": -200,
+      "y": -12,
+      "params": {},
+      "runtimeState": {
+        "energized": true,
+        "activePath": "P->B",
+        "activeFlowLph": 8
+      },
+      "fault": "none"
+    },
+    {
+      "id": "comp_1794950250784_a827",
+      "type": "valve_22",
+      "label": "Ablassventil Tank 1",
+      "x": 480,
+      "y": 256,
+      "params": {
+        "normalState": "NC",
+        "flowRateLph": 210
+      },
+      "runtimeState": {
+        "energized": false,
+        "isOpen": false,
+        "activeFlowLph": 0
+      },
+      "fault": "none"
+    },
+    {
+      "id": "comp_1794950250784_2k4r",
+      "type": "valve_22",
+      "label": "Ablassventil Tank 2",
+      "x": 1092,
+      "y": 152,
+      "params": {
+        "normalState": "NC",
+        "flowRateLph": 210
+      },
+      "runtimeState": {
+        "energized": false,
+        "isOpen": false,
+        "activeFlowLph": 0
+      },
+      "fault": "none"
+    },
+    {
+      "id": "comp_1794950250784_aesy",
+      "type": "tank",
+      "label": "Tank 1",
+      "x": 136,
+      "y": 92,
+      "params": {
+        "medium": "katholyte",
+        "capacityLiters": 510,
+        "initialLevelPct": 0,
+        "probeMode": "3_points",
+        "suctionCount": 1,
+        "enableAeration": true,
+        "dryPct": 10,
+        "preLowPct": 25,
+        "minPct": 40,
+        "maxPct": 80,
+        "overflowPct": 95,
+        "invertDry": false,
+        "invertPre": false,
+        "invertMin": false,
+        "invertMax": false,
+        "invertOvf": false,
+        "currentLiters": 80
+      },
+      "runtimeState": {
+        "levelLiters": 192.0063691111347,
+        "inflowLph": 0,
+        "outflowLph": 0,
+        "isFull": false,
+        "isEmpty": false,
+        "aerated": true,
+        "airFlowLpm": 20,
+        "dryState": true,
+        "preLowState": true,
+        "minState": false,
+        "maxState": true,
+        "overflowState": true
+      },
+      "fault": "none"
+    },
+    {
+      "id": "comp_1794950250784_bnqa",
+      "type": "tank",
+      "label": "Tank 1",
+      "x": 732,
+      "y": 52,
+      "params": {
+        "medium": "katholyte",
+        "capacityLiters": 460,
+        "initialLevelPct": 0,
+        "probeMode": "3_points",
+        "suctionCount": 1,
+        "enableAeration": true,
+        "dryPct": 10,
+        "preLowPct": 25,
+        "minPct": 40,
+        "maxPct": 80,
+        "overflowPct": 95,
+        "invertDry": false,
+        "invertPre": false,
+        "invertMin": false,
+        "invertMax": false,
+        "invertOvf": false,
+        "currentLiters": 80
+      },
+      "runtimeState": {
+        "levelLiters": 10.5208202222361,
+        "inflowLph": 8,
+        "outflowLph": 0,
+        "isFull": false,
+        "isEmpty": false,
+        "aerated": true,
+        "airFlowLpm": 20,
+        "dryState": false,
+        "preLowState": false,
+        "minState": false,
+        "maxState": true,
+        "overflowState": true
+      },
+      "fault": "none"
+    },
+    {
+      "id": "comp_1794950250784_t4cn",
+      "type": "timer_relay",
+      "label": "Zeitrelais K1 - Für MV",
+      "x": -204,
+      "y": -232,
+      "params": {
+        "teleFunction": "Bp",
+        "teleRange": "100h",
+        "teleScalePct": 24
+      },
+      "runtimeState": {
+        "coilEnergized": true,
+        "b1Energized": false,
+        "contactSwitched": true,
+        "elapsedSeconds": 4732.123200011938,
+        "targetSeconds": 86400,
+        "pulsePhaseOn": true,
+        "wasCoilEnergized": true,
+        "wasB1Energized": false,
+        "isTiming": true,
+        "ledUt": "blink"
+      },
+      "fault": "none"
+    },
+    {
+      "id": "comp_1794950250784_4q09",
+      "type": "timer_relay",
+      "label": "Zeitrelais K2",
+      "x": 212,
+      "y": -204,
+      "params": {
+        "teleFunction": "Es",
+        "teleRange": "100h",
+        "teleScalePct": 23
+      },
+      "runtimeState": {
+        "coilEnergized": true,
+        "b1Energized": true,
+        "contactSwitched": false,
+        "elapsedSeconds": 4731.720000000034,
+        "targetSeconds": 82800,
+        "pulsePhaseOn": false,
+        "wasCoilEnergized": true,
+        "wasB1Energized": true,
+        "isTiming": true,
+        "ledUt": "blink"
+      },
+      "fault": "none"
+    },
+    {
+      "id": "comp_1794950250784_7yr5",
+      "type": "timer_relay",
+      "label": "Zeitrelais K3",
+      "x": 636,
+      "y": -180,
+      "params": {
+        "teleFunction": "Es",
+        "teleRange": "100h",
+        "teleScalePct": 23
+      },
+      "runtimeState": {
+        "coilEnergized": true,
+        "b1Energized": false,
+        "contactSwitched": false,
+        "elapsedSeconds": 0,
+        "targetSeconds": 82800,
+        "pulsePhaseOn": false,
+        "wasCoilEnergized": true,
+        "wasB1Energized": false,
+        "isTiming": false,
+        "ledUt": "on"
+      },
+      "fault": "none"
+    },
+    {
+      "id": "comp_1794950250784_m0qy",
+      "type": "terminal_block",
+      "label": "X1 24V-Potentialverteiler",
+      "x": 628,
+      "y": -448,
+      "params": {
+        "outputCount": 10
+      },
+      "runtimeState": {
+        "inputEnergized": true,
+        "voltage": 24
+      },
+      "fault": "none"
+    },
+    {
+      "id": "comp_1794950440824_fkid",
+      "type": "switch",
+      "label": "S1 Schalter",
+      "x": 52,
+      "y": -460,
+      "params": {
+        "mode": "toggle",
+        "pressed": true
+      },
+      "runtimeState": {
+        "isClosed": true,
+        "inputEnergized": true
+      },
+      "fault": "none"
+    },
+    {
+      "id": "comp_1794951142404_urdu",
+      "type": "generator",
+      "label": "Aquadron",
+      "x": -476,
+      "y": 160,
+      "params": {
+        "controlMode": "tank_minmax",
+        "anolyteFlowLph": 52,
+        "katholyteFlowLph": 8,
+        "manualStop": false
+      },
+      "runtimeState": {
+        "enableActive": true,
+        "lockActive": false,
+        "minActive": false,
+        "maxActive": true,
+        "latchActive": true,
+        "productionEnabled": true,
+        "actualAnolyteLph": 52,
+        "actualKatholyteLph": 8,
+        "actualFlowLph": 60,
+        "status": "running"
+      },
+      "fault": "none"
+    },
+    {
+      "id": "comp_1794951158433_sj78",
+      "type": "gully_drain",
+      "label": "Ablauf",
+      "x": 840,
+      "y": 404,
+      "params": {},
+      "runtimeState": {
+        "actualFlowLph": 52,
+        "totalDiscardedLiters": 4196.341530664923,
+        "lastMedium": "anolyte"
+      },
+      "fault": "none"
+    },
+    {
+      "id": "comp_1794952823265_dcss",
+      "type": "contactor_relay",
+      "label": "K0 Hilfsrelais",
+      "x": -472,
+      "y": -68,
+      "params": {},
+      "runtimeState": {
+        "coilEnergized": true
+      },
+      "fault": "none"
+    },
+    {
+      "id": "comp_1795000239766_mv1r",
+      "type": "air_pump",
+      "label": "Luftpumpe Tank 1",
+      "x": 912,
+      "y": -208,
+      "params": {
+        "model": "V-20",
+        "powerMode": "external_24v",
+        "enabled": true
+      },
+      "runtimeState": {
+        "running": true,
+        "externalSignal": true,
+        "airFlowLpm": 20
+      },
+      "fault": "none"
+    },
+    {
+      "id": "comp_1795000461995_9s39",
+      "type": "air_pump",
+      "label": "AP2 Luftpumpe",
+      "x": 1152,
+      "y": -216,
+      "params": {
+        "model": "V-20",
+        "powerMode": "external_24v",
+        "enabled": true
+      },
+      "runtimeState": {
+        "running": true,
+        "externalSignal": true,
+        "airFlowLpm": 20
+      },
+      "fault": "none"
+    }
+  ],
+  "connections": [
+    {
+      "id": "conn_1794950250785_u80a",
+      "domain": "electrical",
+      "fromComponentId": "comp_1794950250784_t4cn",
+      "fromPortId": "no_18",
+      "toComponentId": "comp_1794950250784_qf4n",
+      "toPortId": "v24_in",
+      "fault": "none"
+    },
+    {
+      "id": "conn_1794950250785_z46m",
+      "domain": "electrical",
+      "fromComponentId": "comp_1794950250784_m0qy",
+      "fromPortId": "out_3",
+      "toComponentId": "comp_1794950250784_t4cn",
+      "toPortId": "a2",
+      "fault": "none"
+    },
+    {
+      "id": "conn_1794950250785_m6no",
+      "domain": "electrical",
+      "fromComponentId": "comp_1794950250784_4q09",
+      "fromPortId": "no_18",
+      "toComponentId": "comp_1794950250784_a827",
+      "toPortId": "v24_in",
+      "fault": "none"
+    },
+    {
+      "id": "conn_1794950250785_46jf",
+      "domain": "electrical",
+      "fromComponentId": "comp_1794950250784_m0qy",
+      "fromPortId": "out_6",
+      "toComponentId": "comp_1794950250784_4q09",
+      "toPortId": "a2",
+      "fault": "none"
+    },
+    {
+      "id": "conn_1794950250785_m0u5",
+      "domain": "electrical",
+      "fromComponentId": "comp_1794950250784_7yr5",
+      "fromPortId": "no_18",
+      "toComponentId": "comp_1794950250784_2k4r",
+      "toPortId": "v24_in",
+      "fault": "none"
+    },
+    {
+      "id": "conn_1794950250785_b3u8",
+      "domain": "electrical",
+      "fromComponentId": "comp_1794950250784_m0qy",
+      "fromPortId": "out_9",
+      "toComponentId": "comp_1794950250784_7yr5",
+      "toPortId": "a2",
+      "fault": "none"
+    },
+    {
+      "id": "conn_1794950446431_emk1q",
+      "domain": "electrical",
+      "fromComponentId": "comp_1794950250784_vv28",
+      "fromPortId": "out_24v",
+      "toComponentId": "comp_1794950440824_fkid",
+      "toPortId": "in",
+      "fault": "none"
+    },
+    {
+      "id": "conn_1794950449094_7ytlj",
+      "domain": "electrical",
+      "fromComponentId": "comp_1794950440824_fkid",
+      "fromPortId": "out",
+      "toComponentId": "comp_1794950250784_m0qy",
+      "toPortId": "in_24v",
+      "fault": "none"
+    },
+    {
+      "id": "conn_1794951102372_0ylrk",
+      "domain": "fluid",
+      "fromComponentId": "comp_1794950250784_bnqa",
+      "fromPortId": "fluid_out",
+      "toComponentId": "comp_1794950250784_2k4r",
+      "toPortId": "fluid_in",
+      "fault": "none"
+    },
+    {
+      "id": "conn_1794951216577_zo17n",
+      "domain": "fluid",
+      "fromComponentId": "comp_1794951142404_urdu",
+      "fromPortId": "fluid_katholyte",
+      "toComponentId": "comp_1794950250784_qf4n",
+      "toPortId": "fluid_p",
+      "fault": "none"
+    },
+    {
+      "id": "conn_1794951251416_wdj0j",
+      "domain": "fluid",
+      "fromComponentId": "comp_1794950250784_2k4r",
+      "fromPortId": "fluid_out",
+      "toComponentId": "comp_1794951158433_sj78",
+      "toPortId": "fluid_in",
+      "fault": "none"
+    },
+    {
+      "id": "conn_1794951259291_ckpop",
+      "domain": "fluid",
+      "fromComponentId": "comp_1794950250784_a827",
+      "fromPortId": "fluid_out",
+      "toComponentId": "comp_1794951158433_sj78",
+      "toPortId": "fluid_in",
+      "fault": "none"
+    },
+    {
+      "id": "conn_1794951289886_6sfiw",
+      "domain": "fluid",
+      "fromComponentId": "comp_1794951142404_urdu",
+      "fromPortId": "fluid_anolyte",
+      "toComponentId": "comp_1794951158433_sj78",
+      "toPortId": "fluid_in",
+      "fault": "none"
+    },
+    {
+      "id": "conn_1794952144346_593w0",
+      "domain": "electrical",
+      "fromComponentId": "comp_1794950250784_m0qy",
+      "fromPortId": "out_1",
+      "toComponentId": "comp_1794950250784_t4cn",
+      "toPortId": "a1",
+      "fault": "none"
+    },
+    {
+      "id": "conn_1794952159471_evia7",
+      "domain": "electrical",
+      "fromComponentId": "comp_1794950250784_t4cn",
+      "fromPortId": "a1",
+      "toComponentId": "comp_1794950250784_t4cn",
+      "toPortId": "com_15",
+      "fault": "none"
+    },
+    {
+      "id": "conn_1794952232316_bdmoo",
+      "domain": "electrical",
+      "fromComponentId": "comp_1794950250784_m0qy",
+      "fromPortId": "out_2",
+      "toComponentId": "comp_1794950250784_4q09",
+      "toPortId": "a1",
+      "fault": "none"
+    },
+    {
+      "id": "conn_1794952238047_zg0uo",
+      "domain": "electrical",
+      "fromComponentId": "comp_1794950250784_4q09",
+      "fromPortId": "com_15",
+      "toComponentId": "comp_1794950250784_4q09",
+      "toPortId": "a1",
+      "fault": "none"
+    },
+    {
+      "id": "conn_1794952286463_o73cb",
+      "domain": "electrical",
+      "fromComponentId": "comp_1794950250784_m0qy",
+      "fromPortId": "out_3",
+      "toComponentId": "comp_1794950250784_7yr5",
+      "toPortId": "a1",
+      "fault": "none"
+    },
+    {
+      "id": "conn_1794952292006_w4skk",
+      "domain": "electrical",
+      "fromComponentId": "comp_1794950250784_7yr5",
+      "fromPortId": "com_15",
+      "toComponentId": "comp_1794950250784_7yr5",
+      "toPortId": "a1",
+      "fault": "none"
+    },
+    {
+      "id": "conn_1794952360572_uoemn",
+      "domain": "electrical",
+      "fromComponentId": "comp_1794950250784_m0qy",
+      "fromPortId": "out_4",
+      "toComponentId": "comp_1794951142404_urdu",
+      "toPortId": "max_in",
+      "fault": "none"
+    },
+    {
+      "id": "conn_1794952938059_0m4se",
+      "domain": "electrical",
+      "fromComponentId": "comp_1794950250784_m0qy",
+      "fromPortId": "out_5",
+      "toComponentId": "comp_1794952823265_dcss",
+      "toPortId": "com_11",
+      "fault": "none"
+    },
+    {
+      "id": "conn_1794952943965_nxbyg",
+      "domain": "electrical",
+      "fromComponentId": "comp_1794952823265_dcss",
+      "fromPortId": "com_11",
+      "toComponentId": "comp_1794952823265_dcss",
+      "toPortId": "com_21",
+      "fault": "none"
+    },
+    {
+      "id": "conn_1794953205211_x04u6",
+      "domain": "fluid",
+      "fromComponentId": "comp_1794950250784_qf4n",
+      "fromPortId": "fluid_a",
+      "toComponentId": "comp_1794950250784_aesy",
+      "toPortId": "fluid_in",
+      "fault": "none"
+    },
+    {
+      "id": "conn_1794953208784_6p0lb",
+      "domain": "fluid",
+      "fromComponentId": "comp_1794950250784_qf4n",
+      "fromPortId": "fluid_b",
+      "toComponentId": "comp_1794950250784_bnqa",
+      "toPortId": "fluid_in",
+      "fault": "none"
+    },
+    {
+      "id": "conn_1794955352320_y6uzs",
+      "domain": "fluid",
+      "fromComponentId": "comp_1794950250784_aesy",
+      "fromPortId": "fluid_out",
+      "toComponentId": "comp_1794950250784_a827",
+      "toPortId": "fluid_in",
+      "fault": "none"
+    },
+    {
+      "id": "conn_1794956522953_2vu8h",
+      "domain": "electrical",
+      "fromComponentId": "comp_1794950250784_t4cn",
+      "fromPortId": "no_18",
+      "toComponentId": "comp_1794952823265_dcss",
+      "toPortId": "a1",
+      "fault": "none"
+    },
+    {
+      "id": "conn_1794956536427_dgx14",
+      "domain": "electrical",
+      "fromComponentId": "comp_1794950250784_4q09",
+      "fromPortId": "no_18",
+      "toComponentId": "comp_1794950250784_a827",
+      "toPortId": "a1",
+      "fault": "none"
+    },
+    {
+      "id": "conn_1794956558721_jwpuy",
+      "domain": "electrical",
+      "fromComponentId": "comp_1794950250784_7yr5",
+      "fromPortId": "no_18",
+      "toComponentId": "comp_1794950250784_2k4r",
+      "toPortId": "a1",
+      "fault": "none"
+    },
+    {
+      "id": "conn_1794956739953_krrwv",
+      "domain": "electrical",
+      "fromComponentId": "comp_1794952823265_dcss",
+      "fromPortId": "no_14",
+      "toComponentId": "comp_1794950250784_4q09",
+      "toPortId": "b1",
+      "fault": "none"
+    },
+    {
+      "id": "conn_1794957531649_gu7fc",
+      "domain": "electrical",
+      "fromComponentId": "comp_1794950250784_t4cn",
+      "fromPortId": "nc_16",
+      "toComponentId": "comp_1794950250784_7yr5",
+      "toPortId": "b1",
+      "fault": "none"
+    },
+    {
+      "id": "conn_1794957872400_os4ad",
+      "domain": "electrical",
+      "fromComponentId": "comp_1794952823265_dcss",
+      "fromPortId": "no_24",
+      "toComponentId": "comp_1794950250784_qf4n",
+      "toPortId": "a1",
+      "fault": "none"
+    },
+    {
+      "id": "conn_1795000342743_gxirn",
+      "domain": "electrical",
+      "fromComponentId": "comp_1794950250784_m0qy",
+      "fromPortId": "out_6",
+      "toComponentId": "comp_1795000239766_mv1r",
+      "toPortId": "a1",
+      "fault": "none"
+    },
+    {
+      "id": "conn_1795000354972_ubtir",
+      "domain": "air",
+      "fromComponentId": "comp_1795000239766_mv1r",
+      "fromPortId": "air_out",
+      "toComponentId": "comp_1794950250784_aesy",
+      "toPortId": "air_in",
+      "fault": "none"
+    },
+    {
+      "id": "conn_1795000491043_9t9d7",
+      "domain": "electrical",
+      "fromComponentId": "comp_1794950250784_m0qy",
+      "fromPortId": "out_7",
+      "toComponentId": "comp_1795000461995_9s39",
+      "toPortId": "a1",
+      "fault": "none"
+    },
+    {
+      "id": "conn_1795000504609_3tye4",
+      "domain": "air",
+      "fromComponentId": "comp_1795000461995_9s39",
+      "fromPortId": "air_out",
+      "toComponentId": "comp_1794950250784_bnqa",
+      "toPortId": "air_in",
+      "fault": "none"
+    }
+  ]
+}

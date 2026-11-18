@@ -41,6 +41,7 @@ import {
   ChangeoverSwitchComponent,
   IndicatorColor,
   IndicatorLampComponent,
+  PowerSupply230V,
   PowerSupply24V,
   SwitchComponent,
   SwitchMode,
@@ -324,8 +325,20 @@ export const InspectorPanel: React.FC<InspectorPanelProps> = ({
           <div className="bg-[#141E2E] border border-[#223044] rounded-md p-3">
             <div className="text-[11px] text-slate-400">Aktueller Zustand</div>
             {selectedConnection.domain === 'electrical' ? (
-              <div className={`font-mono text-sm font-semibold mt-1 ${selectedConnection.active ? 'text-red-400' : 'text-slate-400'}`}>
-                {selectedConnection.active ? `${selectedConnection.voltage ?? 24} V DC AKTIV` : '0 V (Inaktiv)'}
+              <div
+                className={`font-mono text-sm font-semibold mt-1 ${
+                  selectedConnection.active
+                    ? (selectedConnection.voltage ?? 24) >= 100
+                      ? 'text-orange-400'
+                      : 'text-red-400'
+                    : 'text-slate-400'
+                }`}
+              >
+                {selectedConnection.active
+                  ? (selectedConnection.voltage ?? 24) >= 100
+                    ? `${selectedConnection.voltage} V AC AKTIV`
+                    : `${selectedConnection.voltage ?? 24} V DC AKTIV`
+                  : '0 V (Inaktiv)'}
               </div>
             ) : selectedConnection.domain === 'analog' ? (
               <div className={`font-mono text-sm font-semibold mt-1 ${selectedConnection.active ? 'text-emerald-400' : 'text-slate-400'}`}>
@@ -344,7 +357,7 @@ export const InspectorPanel: React.FC<InspectorPanelProps> = ({
                   Medium:{' '}
                   <span className="font-semibold text-slate-200">
                     {selectedConnection.medium === 'katholyte'
-                      ? 'Katholyt (Grün)'
+                      ? 'Katholyte (Grün)'
                       : selectedConnection.medium === 'anolyte'
                       ? 'Anolyt (Gelb)'
                       : 'Wasser (Blau)'}
@@ -521,6 +534,31 @@ export const InspectorPanel: React.FC<InspectorPanelProps> = ({
                 >
                   {selectedComponent.params.enabled ? 'EIN (24V)' : 'AUS (0V)'}
                 </button>
+              </div>
+            </div>
+          )}
+
+          {selectedComponent instanceof PowerSupply230V && (
+            <div className="space-y-3 border-t border-[#223044] pt-4">
+              <div className="flex items-center justify-between">
+                <span className="text-slate-300">230V Einspeisung (L/N/PE)</span>
+                <button
+                  type="button"
+                  onClick={() => {
+                    selectedComponent.togglePower();
+                    onMutate();
+                  }}
+                  className={`px-3 py-1 rounded text-xs font-semibold border cursor-pointer ${
+                    selectedComponent.params.enabled
+                      ? 'bg-orange-500/20 text-orange-300 border-orange-500/50'
+                      : 'bg-slate-800 text-slate-400 border-slate-600'
+                  }`}
+                >
+                  {selectedComponent.params.enabled ? 'EIN (230V~)' : 'AUS (0V)'}
+                </button>
+              </div>
+              <div className="text-[10.5px] text-slate-400 bg-[#141E2E] border border-[#223044] rounded p-2 leading-snug">
+                Stellt geschaltete <strong className="text-orange-300">230V AC (L)</strong> inklusive festem <strong className="text-slate-200">N &amp; PE</strong> im Schaltplan bereit (z. B. für Luftpumpen oder über Relaiskontakt geschleift).
               </div>
             </div>
           )}
@@ -727,8 +765,8 @@ export const InspectorPanel: React.FC<InspectorPanelProps> = ({
                     className="w-full bg-[#0B111A] border border-[#243247] rounded-md px-2 py-1.5 text-slate-100 cursor-pointer"
                   >
                     <option value="anolyte">Anolyt (Gelb)</option>
-                    <option value="katholyte">Katholyt (Grün)</option>
-                    <option value="water">Wasser (Blau)</option>
+                    <option value="katholyte">Katholyte (Grün)</option>
+                    <option value="water">Wasser (Dunkelblau)</option>
                   </select>
                 </div>
                 <div>
@@ -1059,7 +1097,7 @@ export const InspectorPanel: React.FC<InspectorPanelProps> = ({
                   />
                 </div>
                 <div>
-                  <label className="block text-[10.5px] text-emerald-300 mb-1">Katholyt (L/h)</label>
+                  <label className="block text-[10.5px] text-emerald-300 mb-1">Katholyte (L/h)</label>
                   <input
                     type="number"
                     min={0}
@@ -1510,7 +1548,7 @@ export const InspectorPanel: React.FC<InspectorPanelProps> = ({
               })()}
 
               <div>
-                <label className="block text-[11px] text-slate-400 mb-1">Stromversorgung / Steuerung</label>
+                <label className="block text-[11px] text-slate-400 mb-1">Stromversorgung / Anschlussart</label>
                 <select
                   value={selectedComponent.getPowerMode()}
                   onChange={(e) => {
@@ -1520,8 +1558,9 @@ export const InspectorPanel: React.FC<InspectorPanelProps> = ({
                   }}
                   className="w-full bg-[#0B111A] border border-[#243247] rounded-md px-2.5 py-1.5 text-slate-100 cursor-pointer"
                 >
-                  <option value="fixed_power">Fester Stromanschluss (Dauerbetrieb)</option>
-                  <option value="external_24v">Externes +24V Steuersignal (Klemme A1)</option>
+                  <option value="ac_230v_direct">230V AC Direktanschluss (L/N/PE)</option>
+                  <option value="external_24v">24V Steuersignal (Koppelrelais → 230V)</option>
+                  <option value="fixed_power">Steckernetzteil (Dauerbetrieb intern)</option>
                 </select>
               </div>
 
@@ -1683,8 +1722,13 @@ export const InspectorPanel: React.FC<InspectorPanelProps> = ({
                 if (p.domain === 'electrical') {
                   const eSig = sig as ElectricalSignal | undefined;
                   const on = Boolean(eSig?.energized);
-                  valText = on ? `${eSig?.voltage ?? 24} V` : '0 V';
-                  valColor = on ? 'text-red-400 font-semibold' : 'text-slate-500';
+                  const volt = eSig?.voltage ?? 24;
+                  valText = on ? (volt >= 100 ? `${volt} V~` : `${volt} V`) : '0 V';
+                  valColor = on
+                    ? volt >= 100
+                      ? 'text-orange-400 font-semibold'
+                      : 'text-red-400 font-semibold'
+                    : 'text-slate-500';
                 } else if (p.domain === 'analog') {
                   const aSig = sig as AnalogSignal | undefined;
                   valText = aSig ? `${aSig.value.toFixed(1)} ${aSig.unit}` : '4.0 mA';
@@ -1917,7 +1961,7 @@ export const InspectorPanel: React.FC<InspectorPanelProps> = ({
                       <span className="font-medium text-slate-200 truncate">{tank.label}</span>
                       <span
                         className={`font-mono ${
-                          isKat ? 'text-emerald-400' : isAno ? 'text-yellow-400' : 'text-sky-400'
+                          isKat ? 'text-emerald-400' : isAno ? 'text-yellow-400' : 'text-blue-400'
                         }`}
                       >
                         {pct.toFixed(1)}%
@@ -1926,7 +1970,7 @@ export const InspectorPanel: React.FC<InspectorPanelProps> = ({
                     <div className="h-1.5 bg-[#0B111A] rounded-full overflow-hidden">
                       <div
                         className={`h-full ${
-                          isKat ? 'bg-emerald-500' : isAno ? 'bg-yellow-500' : 'bg-sky-500'
+                          isKat ? 'bg-emerald-500' : isAno ? 'bg-yellow-500' : 'bg-blue-600'
                         }`}
                         style={{ width: `${Math.max(0, Math.min(100, pct))}%` }}
                       />
