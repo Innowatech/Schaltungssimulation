@@ -1,5 +1,6 @@
 import { SimComponent } from './SimComponent';
 import {
+  AirPumpComponent,
   DosingPumpComponent,
   DrainConsumerComponent,
   FloatProbeComponent,
@@ -13,7 +14,12 @@ import {
   TankComponent,
   WaterMeterComponent,
 } from './components/FluidComponents';
-import { PowerSupply24V, SwitchComponent } from './components/PowerAndSwitch';
+import {
+  ChangeoverSwitchComponent,
+  IndicatorLampComponent,
+  PowerSupply24V,
+  SwitchComponent,
+} from './components/PowerAndSwitch';
 import { ContactorRelayComponent, TimerRelayComponent } from './components/Relays';
 import {
   CurrentTransformerComponent,
@@ -112,6 +118,45 @@ ComponentRegistry.register(
 
 ComponentRegistry.register(
   {
+    type: 'changeover_switch',
+    name: 'Wechselschalter',
+    shortDescription: 'Umschaltkontakt 11 (COM) → 12 (NC) oder 14 (NO)',
+    category: 'electric',
+    width: 180,
+    height: 114,
+    defaultLabelPrefix: 'S2 Wechselschalter',
+  },
+  (id, label, x, y) => new ChangeoverSwitchComponent(id, label, x, y)
+);
+
+ComponentRegistry.register(
+  {
+    type: 'indicator_green',
+    name: 'Leuchtmelder Grün',
+    shortDescription: 'Grüne Signallampe (Eingang +24V DC, 0V intern vorausgesetzt)',
+    category: 'electric',
+    width: 148,
+    height: 104,
+    defaultLabelPrefix: 'H1 Leuchtmelder',
+  },
+  (id, label, x, y) => new IndicatorLampComponent(id, label, x, y, 'green')
+);
+
+ComponentRegistry.register(
+  {
+    type: 'indicator_red',
+    name: 'Leuchtmelder Rot',
+    shortDescription: 'Rote Signallampe (Eingang +24V DC, 0V intern vorausgesetzt)',
+    category: 'electric',
+    width: 148,
+    height: 104,
+    defaultLabelPrefix: 'H2 Leuchtmelder',
+  },
+  (id, label, x, y) => new IndicatorLampComponent(id, label, x, y, 'red')
+);
+
+ComponentRegistry.register(
+  {
     type: 'timer_relay',
     name: 'Zeitrelais (TELE E1ZM10)',
     shortDescription: 'Multifunktion E/R/Ws/Wa/Es/Wu/Bp, 7 Zeitbereiche (1s–100h), A1/B1/15-16-18',
@@ -206,7 +251,7 @@ ComponentRegistry.register(
 ComponentRegistry.register(
   {
     type: 'anolyte_tank',
-    name: 'Anolyte-Tank (Blau)',
+    name: 'Anolyte-Tank (Gelb)',
     shortDescription: 'Anolyt-Behälter inkl. 3/5-Punkt Schwimmerlanze & 0–4 Sauglanzen',
     category: 'fluid',
     width: 224,
@@ -220,7 +265,7 @@ ComponentRegistry.register(
   {
     type: 'katholyte_tank',
     name: 'Katholyte-Tank (Grün)',
-    shortDescription: 'Katholyt-Behälter (Lanze optional zuschaltbar) & 0–4 Sauglanzen',
+    shortDescription: 'Katholyt-Behälter inkl. Belüftungsanschluss, Lanze & 0–4 Sauglanzen',
     category: 'fluid',
     width: 224,
     height: 264,
@@ -248,13 +293,26 @@ ComponentRegistry.register(
   {
     type: 'generator',
     name: 'Erzeuger-Anlage',
-    shortDescription: 'Produziert Anolyt (Blau) & Katholyt (Grün) getrennt + Hand-Stopp',
+    shortDescription: 'Produziert Anolyt (Gelb) & Katholyt (Grün) getrennt + Hand-Stopp',
     category: 'fluid',
     width: 216,
     height: 176,
     defaultLabelPrefix: 'P1 Erzeuger',
   },
   (id, label, x, y) => new GeneratorComponent(id, label, x, y)
+);
+
+ComponentRegistry.register(
+  {
+    type: 'air_pump',
+    name: 'Luftpumpe (AquaForte V-Serie)',
+    shortDescription: 'Sprudelpumpe V-10/20/30/60 zur Tank-Belüftung (Festanschluss oder 24V)',
+    category: 'fluid',
+    width: 204,
+    height: 138,
+    defaultLabelPrefix: 'AP1 Luftpumpe',
+  },
+  (id, label, x, y) => new AirPumpComponent(id, label, x, y)
 );
 
 ComponentRegistry.register(

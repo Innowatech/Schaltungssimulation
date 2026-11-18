@@ -54,6 +54,30 @@ function renderMiniSchematic(type: string): React.ReactNode {
           <circle cx="24" cy="16" r="2" fill="#94A3B8" />
         </svg>
       );
+    case 'changeover_switch':
+      return (
+        <svg viewBox="0 0 36 28" className="w-9 h-7 shrink-0">
+          <line x1="3" y1="14" x2="12" y2="14" stroke="#94A3B8" strokeWidth="1.75" />
+          <line x1="12" y1="14" x2="24" y2="8" stroke="#34D399" strokeWidth="1.75" />
+          <line x1="25" y1="8" x2="33" y2="8" stroke="#94A3B8" strokeWidth="1.6" />
+          <line x1="25" y1="20" x2="33" y2="20" stroke="#94A3B8" strokeWidth="1.6" />
+          <circle cx="12" cy="14" r="2" fill="#94A3B8" />
+          <circle cx="25" cy="8" r="1.8" fill="#34D399" />
+          <circle cx="25" cy="20" r="1.8" fill="#64748B" />
+        </svg>
+      );
+    case 'indicator_green':
+    case 'indicator_red': {
+      const stroke = type === 'indicator_red' ? '#EF4444' : '#10B981';
+      const fill = type === 'indicator_red' ? '#EF4444' : '#34D399';
+      return (
+        <svg viewBox="0 0 36 28" className="w-9 h-7 shrink-0">
+          <circle cx="18" cy="14" r="8.5" fill={fill} fillOpacity="0.22" stroke={stroke} strokeWidth="1.6" />
+          <line x1="12" y1="8" x2="24" y2="20" stroke={stroke} strokeWidth="1.3" />
+          <line x1="24" y1="8" x2="12" y2="20" stroke={stroke} strokeWidth="1.3" />
+        </svg>
+      );
+    }
     case 'timer_relay':
       return (
         <svg viewBox="0 0 36 28" className="w-9 h-7 shrink-0">
@@ -117,9 +141,9 @@ function renderMiniSchematic(type: string): React.ReactNode {
     case 'tank':
       return (
         <svg viewBox="0 0 36 28" className="w-9 h-7 shrink-0">
-          <rect x="8" y="3" width="20" height="22" rx="2" fill="#0F172A" stroke="#38BDF8" strokeWidth="1.5" />
-          <rect x="9.5" y="13" width="17" height="10.5" rx="1" fill="#0EA5E9" fillOpacity="0.7" />
-          <line x1="8" y1="13" x2="28" y2="13" stroke="#7DD3FC" strokeWidth="1.2" />
+          <rect x="8" y="3" width="20" height="22" rx="2" fill="#0F172A" stroke="#EAB308" strokeWidth="1.5" />
+          <rect x="9.5" y="13" width="17" height="10.5" rx="1" fill="#EAB308" fillOpacity="0.72" />
+          <line x1="8" y1="13" x2="28" y2="13" stroke="#FEF08A" strokeWidth="1.2" />
         </svg>
       );
     case 'katholyte_tank':
@@ -141,10 +165,18 @@ function renderMiniSchematic(type: string): React.ReactNode {
     case 'generator':
       return (
         <svg viewBox="0 0 36 28" className="w-9 h-7 shrink-0">
-          <circle cx="16" cy="14" r="9" fill="#162133" stroke="#0EA5E9" strokeWidth="1.5" />
-          <polygon points="14,9 21,14 14,19" fill="#38BDF8" />
-          <line x1="25" y1="10" x2="33" y2="10" stroke="#0EA5E9" strokeWidth="2" />
+          <circle cx="16" cy="14" r="9" fill="#162133" stroke="#EAB308" strokeWidth="1.5" />
+          <polygon points="14,9 21,14 14,19" fill="#FACC15" />
+          <line x1="25" y1="10" x2="33" y2="10" stroke="#EAB308" strokeWidth="2" />
           <line x1="25" y1="18" x2="33" y2="18" stroke="#10B981" strokeWidth="2" />
+        </svg>
+      );
+    case 'air_pump':
+      return (
+        <svg viewBox="0 0 36 28" className="w-9 h-7 shrink-0">
+          <rect x="4" y="6" width="22" height="16" rx="3" fill="#162133" stroke="#22D3EE" strokeWidth="1.5" />
+          <circle cx="15" cy="14" r="4.5" fill="none" stroke="#67E8F9" strokeWidth="1.3" />
+          <line x1="26" y1="14" x2="33" y2="14" stroke="#22D3EE" strokeWidth="2" strokeDasharray="2 1.5" />
         </svg>
       );
     case 'dosing_pump':
@@ -337,12 +369,16 @@ export const ComponentLibrary: React.FC<ComponentLibraryProps> = ({
           <span>24V DC aktiv / Grau = 0V</span>
         </div>
         <div className="flex items-center gap-2">
-          <span className="inline-block w-2.5 h-0.5 bg-emerald-400" />
-          <span>4–20mA Analog / Katholyt (Grün)</span>
+          <span className="inline-block w-2.5 h-1 bg-yellow-400 rounded-xs" />
+          <span>Anolyt (Gelb) · Wasser (Blau)</span>
         </div>
         <div className="flex items-center gap-2">
-          <span className="inline-block w-2.5 h-1 bg-sky-400 rounded-xs" />
-          <span>Anolyt / Wasser (Blau)</span>
+          <span className="inline-block w-2.5 h-0.5 bg-emerald-400" />
+          <span>Katholyt (Grün) / 4–20mA</span>
+        </div>
+        <div className="flex items-center gap-2">
+          <span className="inline-block w-2.5 h-0.5 bg-cyan-400" />
+          <span>Druckluft / Belüftung (Cyan)</span>
         </div>
       </div>
     </aside>

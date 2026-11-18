@@ -1,6 +1,7 @@
 import { ComponentRegistry } from './ComponentRegistry';
 import { SimComponent, ZERO_ANALOG_MA, ZERO_VOLT } from './SimComponent';
 import {
+  AirPumpComponent,
   DosingPumpComponent,
   DrainConsumerComponent,
   FloatProbeComponent,
@@ -14,7 +15,11 @@ import {
   TankComponent,
   WaterMeterComponent,
 } from './components/FluidComponents';
-import { PowerSupply24V, SwitchComponent } from './components/PowerAndSwitch';
+import {
+  ChangeoverSwitchComponent,
+  PowerSupply24V,
+  SwitchComponent,
+} from './components/PowerAndSwitch';
 import { ContactorRelayComponent, TimerRelayComponent } from './components/Relays';
 import { LogicGateComponent } from './components/SignalAndLogic';
 import { TerminalBlockComponent } from './components/TerminalBlock';
@@ -151,6 +156,7 @@ export class SimulationEngine {
       active: false,
       voltage: 0,
       flowRateLph: 0,
+      airFlowLpm: 0,
     };
 
     this.connections = [...this.connections, conn];
@@ -282,6 +288,7 @@ export class SimulationEngine {
         active: false,
         voltage: 0,
         flowRateLph: 0,
+        airFlowLpm: 0,
       });
     }
 
@@ -310,6 +317,7 @@ export class SimulationEngine {
   public evaluateInstant(): void {
     this.solveElectricalAndAnalogNetwork();
     this.solveFluidNetwork(0);
+    this.solveAirNetwork();
     this.solveElectricalAndAnalogNetwork();
   }
 
@@ -331,6 +339,7 @@ export class SimulationEngine {
 
     this.solveElectricalAndAnalogNetwork();
     this.solveFluidNetwork(dtSimSeconds);
+    this.solveAirNetwork();
     this.solveElectricalAndAnalogNetwork();
   }
 
@@ -539,6 +548,12 @@ export class SimulationEngine {
     }
     if (comp instanceof SwitchComponent) {
       return comp.isContactClosed();
+    }
+    if (comp instanceof ChangeoverSwitchComponent) {
+      const switched = comp.isSwitched();
+      if (outputPortId === 'nc') return !switched;
+      if (outputPortId === 'no') return switched;
+      return false;
     }
     if (comp instanceof TimerRelayComponent) {
       const switched = Boolean(comp.runtimeState.contactSwitched);
@@ -1486,6 +1501,48 @@ export class SimulationEngine {
     }
   }
 
+  private solveAirNetwork(): void {
+    const airConns = this.connections.filter((c) => c.domain === 'air');
+    for (const conn of airConns) {
+      conn.active = false;
+      conn.airFlowLpm = 0;
+    }
+
+    for (const comp of this.components.values()) {
+      if (comp instanceof TankComponent) {
+        comp.runtimeState.aerated = false;
+        comp.runtimeState.airFlowLpm = 0;
+      }
+    }
+
+    for (const comp of this.components.values()) {
+      if (!(comp instanceof AirPumpComponent)) continue;
+      const running = Boolean(comp.runtimeState.running);
+      const lpm = running ? Number(comp.runtimeState.airFlowLpm ?? comp.getNominalLpm()) : 0;
+      if (!running || lpm <= 0) continue;
+
+      const outgoing = airConns.filter(
+        (c) =>
+          c.fromComponentId === comp.id &&
+          c.fromPortId === 'air_out' &&
+          c.fault !== 'open_circuit'
+      );
+      if (outgoing.length === 0) continue;
+
+      const perBranch = lpm / outgoing.length;
+      for (const conn of outgoing) {
+        const target = this.components.get(conn.toComponentId);
+        if (target instanceof TankComponent && target.isAerationEnabled() && conn.toPortId === 'air_in') {
+          conn.active = true;
+          conn.airFlowLpm = perBranch;
+          target.runtimeState.aerated = true;
+          target.runtimeState.airFlowLpm =
+            Number(target.runtimeState.airFlowLpm ?? 0) + perBranch;
+        }
+      }
+    }
+  }
+
   public getActiveFaultReports(): FaultReportItem[] {
     const reports: FaultReportItem[] = [];
 
@@ -1557,10 +1614,16 @@ export class SimulationEngine {
           targetLabel: label,
           faultType: 'open_circuit',
           faultLabel:
-            conn.domain === 'fluid' ? 'Rohrleitung blockiert / unterbrochen' : 'Leitungsunterbrechung',
+            conn.domain === 'fluid'
+              ? 'Rohrleitung blockiert / unterbrochen'
+              : conn.domain === 'air'
+              ? 'Luftschlauch unterbrochen / abgeknickt'
+              : 'Leitungsunterbrechung',
           impactSummary:
             conn.domain === 'fluid'
               ? `Kein Medium-Durchfluss zu ${toComp?.label ?? 'Ziel'}. Vorgelagerte Pumpen laufen ggf. gegen Blockade.`
+              : conn.domain === 'air'
+              ? `Keine Druckluftzufuhr an ${toComp?.label ?? 'Tank'}.`
               : `Kein Signaltransfer an ${toComp?.label ?? 'Ziel'} (0 V / unterbrochen).`,
           severity: 'warning',
         });

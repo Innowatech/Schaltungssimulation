@@ -36,9 +36,10 @@ export class TankComponent extends SimComponent {
     this.params = {
       medium: (isKatholyte ? 'katholyte' : 'anolyte') as FluidMedium,
       capacityLiters: 1000,
-      initialLevelPct: isKatholyte ? 20 : 30,
+      initialLevelPct: 0,
       probeMode: (isKatholyte ? 'none' : '3_points') as TankProbeMode,
       suctionCount: 1, // 0..4 Sauglanzen
+      enableAeration: isKatholyte,
       dryPct: 10,
       preLowPct: 25,
       minPct: 40,
@@ -50,13 +51,15 @@ export class TankComponent extends SimComponent {
       invertMax: false,
       invertOvf: false,
     };
-    const initPct = Number(this.params.initialLevelPct ?? 30);
+    const initPct = Number(this.params.initialLevelPct ?? 0);
     this.runtimeState = {
       levelLiters: (initPct / 100) * 1000,
       inflowLph: 0,
       outflowLph: 0,
       isFull: false,
-      isEmpty: false,
+      isEmpty: initPct <= 0.1,
+      aerated: false,
+      airFlowLpm: 0,
       dryState: false,
       preLowState: false,
       minState: false,
@@ -69,6 +72,13 @@ export class TankComponent extends SimComponent {
     const raw = this.params.medium as FluidMedium | undefined;
     if (raw === 'anolyte' || raw === 'katholyte' || raw === 'water') return raw;
     return this.type === 'katholyte_tank' ? 'katholyte' : 'anolyte';
+  }
+
+  public isAerationEnabled(): boolean {
+    if (typeof this.params.enableAeration === 'boolean') {
+      return this.params.enableAeration;
+    }
+    return this.getMedium() === 'katholyte';
   }
 
   public getProbeMode(): TankProbeMode {
@@ -192,10 +202,23 @@ export class TankComponent extends SimComponent {
             direction: 'output',
             side: 'left',
             offsetX: 0,
-            offsetY: 218,
+            offsetY: 214,
           }
         );
       }
+    }
+
+    if (this.isAerationEnabled()) {
+      ports.push({
+        id: 'air_in',
+        label: 'Luft',
+        description: 'Luftschlauch-Anschluss für Sprudelpumpe (Belüftung)',
+        domain: 'air',
+        direction: 'input',
+        side: 'left',
+        offsetX: 0,
+        offsetY: this.height - 22,
+      });
     }
 
     return ports;
@@ -289,13 +312,15 @@ export class TankComponent extends SimComponent {
 
   public reset(): void {
     super.reset();
-    const initPct = Math.max(0, Math.min(100, Number(this.params.initialLevelPct ?? 30)));
+    const initPct = Math.max(0, Math.min(100, Number(this.params.initialLevelPct ?? 0)));
     this.runtimeState = {
       levelLiters: (initPct / 100) * this.getCapacity(),
       inflowLph: 0,
       outflowLph: 0,
       isFull: initPct >= 99.9,
       isEmpty: initPct <= 0.1,
+      aerated: false,
+      airFlowLpm: 0,
     };
   }
 }
@@ -1584,3 +1609,127 @@ export class InjectionPointComponent extends SimComponent {
     ];
   }
 }
+
+export type AirPumpModel = 'V-10' | 'V-20' | 'V-30' | 'V-60';
+export type AirPumpPowerMode = 'fixed_power' | 'external_24v';
+
+export const AIR_PUMP_MODELS: Record<
+  AirPumpModel,
+  { outputLpm: number; watts: number; pressureMpa: string; noiseDb: string }
+> = {
+  'V-10': { outputLpm: 10, watts: 10, pressureMpa: '>0.02 MPa', noiseDb: '<35 dB' },
+  'V-20': { outputLpm: 20, watts: 15, pressureMpa: '>0.02 MPa', noiseDb: '<40 dB' },
+  'V-30': { outputLpm: 30, watts: 25, pressureMpa: '>0.025 MPa', noiseDb: '<40 dB' },
+  'V-60': { outputLpm: 60, watts: 35, pressureMpa: '>0.03 MPa', noiseDb: '<45 dB' },
+};
+
+export class AirPumpComponent extends SimComponent {
+  public readonly type = 'air_pump';
+  public readonly category: ComponentCategory = 'fluid';
+  public readonly width = 204;
+  public readonly height = 138;
+
+  constructor(id: string, label = 'AP1 AquaForte Luftpumpe', x = 0, y = 0) {
+    super(id, label, x, y);
+    this.params = {
+      model: 'V-20' as AirPumpModel,
+      powerMode: 'fixed_power' as AirPumpPowerMode,
+      enabled: true,
+    };
+    this.runtimeState = {
+      running: true,
+      externalSignal: false,
+      airFlowLpm: 20,
+    };
+  }
+
+  public getModel(): AirPumpModel {
+    const m = this.params.model as AirPumpModel | undefined;
+    if (m && m in AIR_PUMP_MODELS) return m;
+    return 'V-20';
+  }
+
+  public getPowerMode(): AirPumpPowerMode {
+    return this.params.powerMode === 'external_24v' ? 'external_24v' : 'fixed_power';
+  }
+
+  public getNominalLpm(): number {
+    return AIR_PUMP_MODELS[this.getModel()].outputLpm;
+  }
+
+  public getPorts(): PortDefinition[] {
+    const ports: PortDefinition[] = [];
+    if (this.getPowerMode() === 'external_24v') {
+      ports.push({
+        id: 'a1',
+        label: 'A1 (+24V)',
+        description: 'Externes +24V Steuersignal (z. B. von Relais / Schalter)',
+        domain: 'electrical',
+        direction: 'input',
+        side: 'left',
+        offsetX: 0,
+        offsetY: 56,
+      });
+    }
+    ports.push({
+      id: 'air_out',
+      label: 'Luft AUS',
+      description: 'Druckluft-Ausgang für Luftschlauch zum Tank',
+      domain: 'air',
+      direction: 'output',
+      side: 'right',
+      offsetX: this.width,
+      offsetY: 74,
+    });
+    return ports;
+  }
+
+  public getSupportedFaults(): ComponentFaultType[] {
+    return ['power_failure', 'short_circuit'];
+  }
+
+  public getElectricalLoadAmps(): number {
+    if (this.fault === 'short_circuit') return 25.0;
+    if (this.getPowerMode() === 'external_24v' && this.runtimeState.running) {
+      return AIR_PUMP_MODELS[this.getModel()].watts / 24;
+    }
+    return 0;
+  }
+
+  public evaluateElectrical(
+    inputs: Map<string, ElectricalSignal>,
+    _context: SimulationContext
+  ): Map<string, ElectricalSignal> {
+    if (this.fault === 'power_failure' || this.fault === 'short_circuit') {
+      this.runtimeState.running = false;
+      this.runtimeState.externalSignal = false;
+      this.runtimeState.airFlowLpm = 0;
+      return new Map();
+    }
+
+    const mode = this.getPowerMode();
+    const enabled = Boolean(this.params.enabled ?? true);
+    const extOn = Boolean(inputs.get('a1')?.energized);
+    this.runtimeState.externalSignal = extOn;
+
+    const running = mode === 'fixed_power' ? enabled : enabled && extOn;
+    this.runtimeState.running = running;
+    this.runtimeState.airFlowLpm = running ? this.getNominalLpm() : 0;
+    return new Map();
+  }
+
+  public togglePower(): void {
+    this.params.enabled = !Boolean(this.params.enabled ?? true);
+  }
+
+  public reset(): void {
+    super.reset();
+    const running = this.getPowerMode() === 'fixed_power' && Boolean(this.params.enabled ?? true);
+    this.runtimeState = {
+      running,
+      externalSignal: false,
+      airFlowLpm: running ? this.getNominalLpm() : 0,
+    };
+  }
+}
+

@@ -2,6 +2,8 @@ import React from 'react';
 import { Settings } from 'lucide-react';
 import { SimComponent } from '../engine/SimComponent';
 import {
+  AIR_PUMP_MODELS,
+  AirPumpComponent,
   DosingPumpComponent,
   DrainConsumerComponent,
   FloatProbeComponent,
@@ -15,7 +17,12 @@ import {
   TankComponent,
   WaterMeterComponent,
 } from '../engine/components/FluidComponents';
-import { PowerSupply24V, SwitchComponent } from '../engine/components/PowerAndSwitch';
+import {
+  ChangeoverSwitchComponent,
+  IndicatorLampComponent,
+  PowerSupply24V,
+  SwitchComponent,
+} from '../engine/components/PowerAndSwitch';
 import {
   ContactorRelayComponent,
   TimerRelayComponent,
@@ -78,6 +85,96 @@ function getFaultBadgeText(fault: ComponentFaultType): string | null {
   if (fault === 'valve_stuck_closed') return 'KLEMMT (ZU)';
   if (fault === 'valve_stuck_open') return 'KLEMMT (OFFEN)';
   return null;
+}
+
+function getHeaderGreenLedState(component: SimComponent): {
+  show: boolean;
+  on: boolean;
+  title: string;
+} {
+  if (component instanceof PowerSupply24V) {
+    const on = Boolean(component.runtimeState.active);
+    return { show: true, on, title: on ? '24V Ausgang aktiv' : '24V Ausgang aus' };
+  }
+  if (component instanceof TerminalBlockComponent) {
+    const on = Boolean(component.runtimeState.inputEnergized);
+    return { show: true, on, title: on ? '24V Schiene aktiv' : '0V (Inaktiv)' };
+  }
+  if (component instanceof SwitchComponent) {
+    const on = component.isContactClosed();
+    return { show: true, on, title: on ? 'Schalter geschlossen (EIN)' : 'Schalter offen (AUS)' };
+  }
+  if (component instanceof ChangeoverSwitchComponent) {
+    const on = Boolean(component.runtimeState.inputEnergized) || component.isSwitched();
+    return {
+      show: true,
+      on,
+      title: component.isSwitched() ? 'Stellung II (11 → 14)' : 'Stellung I (11 → 12)',
+    };
+  }
+  if (component instanceof IndicatorLampComponent) {
+    const on = Boolean(component.runtimeState.lit);
+    return { show: true, on, title: on ? 'Leuchtmelder EIN (24V)' : 'Leuchtmelder AUS' };
+  }
+  if (component instanceof TimerRelayComponent) {
+    const on = Boolean(component.runtimeState.contactSwitched);
+    return { show: true, on, title: on ? 'Relais geschaltet (15 → 18)' : 'Relais Ruhezustand (15 → 16)' };
+  }
+  if (component instanceof ContactorRelayComponent) {
+    const on = Boolean(component.runtimeState.coilEnergized);
+    return { show: true, on, title: on ? 'Schütz angezogen (24V)' : 'Schütz abgefallen (0V)' };
+  }
+  if (component instanceof CurrentTransformerComponent) {
+    const on = Boolean(component.runtimeState.inputEnergized);
+    return { show: true, on, title: on ? 'Laststrom aktiv' : 'Stromlos' };
+  }
+  if (component instanceof SignalTransmitterComponent) {
+    const on = Boolean(component.runtimeState.thresholdTriggered);
+    return { show: true, on, title: on ? 'Grenzwert Q = 24V EIN' : 'Grenzwert Q = 0V' };
+  }
+  if (component instanceof LogicGateComponent) {
+    const on = Boolean(component.runtimeState.out);
+    return { show: true, on, title: on ? 'Ausgang Q = 24V (TRUE)' : 'Ausgang Q = 0V (FALSE)' };
+  }
+  if (component instanceof SolenoidValve32Component) {
+    const on = Boolean(component.runtimeState.energized);
+    return { show: true, on, title: on ? 'Magnetventil geschaltet (P → B)' : 'Magnetventil Ruhezustand (P → A)' };
+  }
+  if (component instanceof SolenoidValve22Component) {
+    const on = Boolean(component.runtimeState.isOpen);
+    return { show: true, on, title: on ? 'Ventil OFFEN (Durchfluss)' : 'Ventil GESCHLOSSEN' };
+  }
+  if (component instanceof DrainConsumerComponent) {
+    const on = component.isOpen();
+    return { show: true, on, title: on ? 'Verbraucher aktiv' : 'Verbraucher geschlossen' };
+  }
+  if (component instanceof GeneratorComponent) {
+    const on = Boolean(component.runtimeState.productionEnabled);
+    return { show: true, on, title: on ? 'Erzeuger aktiv' : 'Erzeuger Standby / Stopp' };
+  }
+  if (component instanceof DosingPumpComponent) {
+    const on = component.runtimeState.status === 'dosing';
+    return { show: true, on, title: on ? 'Dosierpumpe fördert' : 'Dosierpumpe Standby' };
+  }
+  if (component instanceof AirPumpComponent) {
+    const on = Boolean(component.runtimeState.running);
+    return { show: true, on, title: on ? 'Luftpumpe läuft' : 'Luftpumpe AUS' };
+  }
+  if (component instanceof MainWaterLineComponent) {
+    const on = Boolean(component.runtimeState.flowing);
+    return { show: true, on, title: on ? 'Durchfluss aktiv' : 'Kein Durchfluss' };
+  }
+  if (component instanceof WaterMeterComponent) {
+    const on = Boolean(component.runtimeState.pulseActive);
+    return { show: true, on, title: on ? 'Impulskontakt aktiv' : 'Bereit' };
+  }
+  if (component instanceof FloatProbeComponent) {
+    const on =
+      Boolean(component.runtimeState.powered) &&
+      (Boolean(component.runtimeState.minTriggered) || Boolean(component.runtimeState.maxTriggered));
+    return { show: true, on, title: on ? 'Sensorkontakt aktiv' : 'Sensor Ruhe / 0V' };
+  }
+  return { show: false, on: false, title: '' };
 }
 
 export const ComponentNode: React.FC<ComponentNodeProps> = ({
@@ -227,12 +324,113 @@ export const ComponentNode: React.FC<ComponentNodeProps> = ({
               {isMomentary ? 'Tasten' : closed ? 'EIN' : 'AUS'}
             </button>
           </div>
-          <div className="text-[10px] text-slate-400">
-            {mode === 'toggle'
-              ? 'Schalter (rastend)'
-              : mode === 'momentary_nc'
-              ? 'Taster Öffner (NC)'
-              : 'Taster Schließer (NO)'}
+          <div className="flex items-center justify-between text-[10px] text-slate-400">
+            <span>
+              {mode === 'toggle'
+                ? 'Schalter (rastend)'
+                : mode === 'momentary_nc'
+                ? 'Taster Öffner (NC)'
+                : 'Taster Schließer (NO)'}
+            </span>
+            <span className={`font-mono font-semibold ${activeOutput ? 'text-emerald-400' : closed ? 'text-emerald-300/80' : 'text-slate-500'}`}>
+              {closed ? 'EIN' : 'AUS'}
+            </span>
+          </div>
+        </div>
+      );
+    }
+
+    // 3b. Wechselschalter (11 -> 12 / 14)
+    if (component instanceof ChangeoverSwitchComponent) {
+      const switched = component.isSwitched();
+      const inputEnergized = Boolean(component.runtimeState.inputEnergized);
+      const ncActive = inputEnergized && !switched && component.fault === 'none';
+      const noActive = inputEnergized && switched && component.fault === 'none';
+
+      return (
+        <div className="px-3 py-2 flex flex-col justify-between h-[calc(100%-28px)]">
+          <div className="flex items-center justify-between gap-2">
+            <svg viewBox="0 0 68 38" className="w-16 h-9 shrink-0">
+              <line x1="4" y1="19" x2="20" y2="19" stroke={inputEnergized ? '#EF4444' : '#64748B'} strokeWidth="2.2" />
+              <line
+                x1="20"
+                y1="19"
+                x2="45"
+                y2={switched ? '29' : '9'}
+                stroke={switched ? (noActive ? '#34D399' : '#E2E8F0') : ncActive ? '#34D399' : '#E2E8F0'}
+                strokeWidth="2.4"
+                strokeLinecap="round"
+              />
+              <line x1="45" y1="9" x2="64" y2="9" stroke={ncActive ? '#EF4444' : '#64748B'} strokeWidth="2.2" />
+              <line x1="45" y1="29" x2="64" y2="29" stroke={noActive ? '#EF4444' : '#64748B'} strokeWidth="2.2" />
+              <circle cx="20" cy="19" r="2.6" fill={inputEnergized ? '#EF4444' : '#94A3B8'} />
+              <circle cx="45" cy="9" r="2.8" fill={!switched ? '#34D399' : '#475569'} />
+              <circle cx="45" cy="29" r="2.8" fill={switched ? '#34D399' : '#475569'} />
+            </svg>
+
+            <button
+              type="button"
+              onPointerDown={stopDrag}
+              onClick={(e) => {
+                e.stopPropagation();
+                component.toggle();
+                onMutateComponent();
+              }}
+              className={`px-2 py-1 rounded text-[11px] font-semibold border transition-colors cursor-pointer ${
+                switched
+                  ? 'bg-emerald-500/20 text-emerald-300 border-emerald-500/50 hover:bg-emerald-500/30'
+                  : 'bg-sky-500/15 text-sky-300 border-sky-500/40 hover:bg-sky-500/25'
+              }`}
+            >
+              {switched ? 'II (14)' : 'I (12)'}
+            </button>
+          </div>
+          <div className="flex items-center justify-between text-[10px] font-mono">
+            <span className="text-slate-400">11 → {switched ? '14 NO' : '12 NC'}</span>
+            <span className={ncActive || noActive ? 'text-emerald-400 font-semibold' : 'text-slate-500'}>
+              {ncActive || noActive ? '24V AKTIV' : '0V'}
+            </span>
+          </div>
+        </div>
+      );
+    }
+
+    // 3c. Leuchtmelder (Grün / Rot)
+    if (component instanceof IndicatorLampComponent) {
+      const color = component.getColor();
+      const lit = Boolean(component.runtimeState.lit);
+      const isRed = color === 'red';
+
+      return (
+        <div className="px-3 py-2 flex items-center justify-between gap-3 h-[calc(100%-28px)]">
+          <div
+            className={`w-12 h-12 rounded-full border-2 flex items-center justify-center shrink-0 transition-all ${
+              lit
+                ? isRed
+                  ? 'bg-red-500 border-red-200 shadow-[0_0_20px_5px_rgba(239,68,68,0.85)]'
+                  : 'bg-emerald-400 border-emerald-100 shadow-[0_0_20px_5px_rgba(52,211,153,0.9)]'
+                : isRed
+                ? 'bg-red-950/50 border-red-800/70'
+                : 'bg-emerald-950/50 border-emerald-800/70'
+            }`}
+          >
+            <div
+              className={`w-5 h-5 rounded-full ${
+                lit ? 'bg-white/70 blur-[1px]' : 'bg-white/10'
+              }`}
+            />
+          </div>
+          <div className="flex flex-col justify-center min-w-0 flex-1 text-right">
+            <span
+              className={`font-mono text-xs font-bold ${
+                lit ? (isRed ? 'text-red-300' : 'text-emerald-300') : 'text-slate-500'
+              }`}
+            >
+              {lit ? 'EIN (24V)' : 'AUS (0V)'}
+            </span>
+            <span className="text-[10px] text-slate-400">
+              {isRed ? 'Melder Rot' : 'Melder Grün'}
+            </span>
           </div>
         </div>
       );
@@ -265,11 +463,11 @@ export const ComponentNode: React.FC<ComponentNodeProps> = ({
           <div className="flex items-center justify-between bg-[#0B111A] border border-[#1E2A3B] rounded px-2 py-1 text-[10px]">
             <div className="flex items-center gap-1.5">
               <span
-                className={`w-2.5 h-2.5 rounded-full border ${
+                className={`w-3 h-3 rounded-full border ${
                   ledUt === 'blink'
-                    ? 'bg-emerald-400 border-emerald-200 animate-pulse shadow-[0_0_6px_#34d399]'
+                    ? 'bg-emerald-400 border-emerald-100 animate-pulse shadow-[0_0_10px_#34d399]'
                     : ledUt === 'on'
-                    ? 'bg-emerald-500 border-emerald-300 shadow-[0_0_6px_#10b981]'
+                    ? 'bg-emerald-400 border-emerald-100 shadow-[0_0_10px_#34d399]'
                     : 'bg-slate-800 border-slate-600'
                 }`}
               />
@@ -277,9 +475,9 @@ export const ComponentNode: React.FC<ComponentNodeProps> = ({
             </div>
             <div className="flex items-center gap-1.5">
               <span
-                className={`w-2.5 h-2.5 rounded-full border ${
+                className={`w-3 h-3 rounded-full border ${
                   switched
-                    ? 'bg-amber-400 border-amber-200 shadow-[0_0_6px_#fbbf24]'
+                    ? 'bg-emerald-400 border-emerald-100 shadow-[0_0_10px_#34d399]'
                     : 'bg-slate-800 border-slate-600'
                 }`}
               />
@@ -472,10 +670,11 @@ export const ComponentNode: React.FC<ComponentNodeProps> = ({
       );
     }
 
-    // 9. Anolyte / Katholyte Tank
+    // 9. Anolyte (Gelb) / Katholyte (Grün) / Wasser (Blau) Tank
     if (component instanceof TankComponent) {
       const medium = component.getMedium();
       const isKat = medium === 'katholyte';
+      const isWater = medium === 'water';
       const cap = component.getCapacity();
       const liters = component.getLevelLiters();
       const pct = component.getLevelPercent();
@@ -484,24 +683,34 @@ export const ComponentNode: React.FC<ComponentNodeProps> = ({
       const isFull = component.isFull();
       const probeMode = component.getProbeMode();
       const suctionCount = component.getSuctionCount();
+      const aerated = Boolean(component.runtimeState.aerated);
+      const airFlowLpm = Number(component.runtimeState.airFlowLpm ?? 0);
 
-      const liquidClass = isFull
-        ? 'bg-gradient-to-t from-amber-600/80 to-amber-400/75'
-        : isKat
+      const liquidClass = isKat
         ? 'bg-gradient-to-t from-emerald-700/85 to-emerald-400/75'
-        : 'bg-gradient-to-t from-sky-700/85 to-sky-400/75';
+        : isWater
+        ? 'bg-gradient-to-t from-sky-700/85 to-sky-400/75'
+        : 'bg-gradient-to-t from-yellow-600/85 to-yellow-400/80';
+
+      const surfaceLineClass = isKat
+        ? 'bg-emerald-200/80'
+        : isWater
+        ? 'bg-sky-200/80'
+        : 'bg-yellow-200/90';
+
+      const mediumBadgeClass = isKat
+        ? 'bg-emerald-500/15 text-emerald-300 border-emerald-500/40'
+        : isWater
+        ? 'bg-sky-500/15 text-sky-300 border-sky-500/40'
+        : 'bg-yellow-500/15 text-yellow-300 border-yellow-500/40';
+
+      const mediumLabel = isKat ? 'Katholyt' : isWater ? 'Wasser' : 'Anolyt';
 
       return (
         <div className="px-3 py-2 flex flex-col justify-between h-[calc(100%-28px)]">
           <div className="flex items-center justify-between text-[10px] mb-1">
-            <span
-              className={`font-semibold px-1.5 py-0.5 rounded border ${
-                isKat
-                  ? 'bg-emerald-500/15 text-emerald-300 border-emerald-500/40'
-                  : 'bg-sky-500/15 text-sky-300 border-sky-500/40'
-              }`}
-            >
-              {isKat ? 'Katholyt' : 'Anolyt'}
+            <span className={`font-semibold px-1.5 py-0.5 rounded border ${mediumBadgeClass}`}>
+              {mediumLabel}
             </span>
             <span className="font-mono text-[9.5px] text-slate-400">
               {probeMode === 'none' ? 'Ohne Lanze' : probeMode === '5_points' ? '5-Pkt' : '3-Pkt'} · {suctionCount}× Saug
@@ -510,35 +719,58 @@ export const ComponentNode: React.FC<ComponentNodeProps> = ({
 
           <div className="relative flex-1 min-h-[96px] w-full bg-[#090E16] border border-[#2A3B55] rounded overflow-hidden">
             <div
-              className={`absolute bottom-0 left-0 right-0 transition-[height] duration-100 ${liquidClass}`}
+              className={`absolute bottom-0 left-0 right-0 ${liquidClass}`}
               style={{ height: `${Math.max(0, Math.min(100, pct))}%` }}
             >
-              {pct > 1 && (
-                <div className={`h-[2px] w-full ${isKat ? 'bg-emerald-200/80' : 'bg-sky-200/80'}`} />
+              {pct > 1 && <div className={`h-[2px] w-full ${surfaceLineClass}`} />}
+              {aerated && pct > 2 && (
+                <div className="absolute inset-0 overflow-hidden pointer-events-none">
+                  <span className="animate-bubble-1 absolute bottom-1 left-[14%] w-1.5 h-1.5 rounded-full bg-cyan-100/85" />
+                  <span className="animate-bubble-2 absolute bottom-1 left-[28%] w-2 h-2 rounded-full bg-white/75" />
+                  <span className="animate-bubble-3 absolute bottom-1 left-[44%] w-1.5 h-1.5 rounded-full bg-cyan-200/85" />
+                  <span className="animate-bubble-1 absolute bottom-1 left-[60%] w-2 h-2 rounded-full bg-white/70" />
+                  <span className="animate-bubble-2 absolute bottom-1 left-[76%] w-1.5 h-1.5 rounded-full bg-cyan-100/85" />
+                  <span className="animate-bubble-3 absolute bottom-1 left-[88%] w-1.5 h-1.5 rounded-full bg-white/80" />
+                </div>
               )}
             </div>
 
             <div className="absolute inset-0 pointer-events-none flex flex-col justify-between py-2 px-1.5 text-[9px] font-mono text-slate-400/80">
               <div className="flex justify-between items-center border-b border-dashed border-slate-600/40 pb-0.5">
                 <span>100%</span>
-                {isFull && <span className="text-amber-300 font-bold">VOLL</span>}
+                {isFull && <span className="text-red-400 font-bold">VOLL</span>}
               </div>
               <div className="border-b border-dashed border-slate-600/30">50%</div>
               <div>0%</div>
             </div>
 
             <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none">
-              <div className="tank-readout flex flex-col items-center px-2 py-0.5 rounded bg-slate-900/60 backdrop-blur-[1px]">
+              <div className="tank-readout flex flex-col items-center px-2 py-0.5 rounded bg-slate-900/65 backdrop-blur-[1px]">
                 <span className="font-mono text-sm font-bold text-white">{Math.round(liters)} L</span>
                 <span className="font-mono text-[10px] text-slate-200">
                   {pct.toFixed(1)}% / {cap} L
                 </span>
+                {aerated && (
+                  <span className="font-mono text-[9px] text-cyan-300 font-semibold">
+                    Belüftet · {Math.round(airFlowLpm)} L/min
+                  </span>
+                )}
               </div>
             </div>
           </div>
 
           <div className="flex items-center justify-between text-[10px] font-mono mt-1">
-            <span className={inflow > 0 ? (isKat ? 'text-emerald-400' : 'text-sky-400') : 'text-slate-500'}>
+            <span
+              className={
+                inflow > 0
+                  ? isKat
+                    ? 'text-emerald-400'
+                    : isWater
+                    ? 'text-sky-400'
+                    : 'text-yellow-400'
+                  : 'text-slate-500'
+              }
+            >
               +{Math.round(inflow)} L/h
             </span>
             <span className={outflow > 0 ? 'text-amber-400' : 'text-slate-500'}>
@@ -562,7 +794,9 @@ export const ComponentNode: React.FC<ComponentNodeProps> = ({
                 component.setManualLevelPercent(Number(e.target.value));
                 onMutateComponent();
               }}
-              className={`w-full h-1.5 cursor-pointer ${isKat ? 'accent-emerald-400' : 'accent-sky-400'}`}
+              className={`w-full h-1.5 cursor-pointer ${
+                isKat ? 'accent-emerald-400' : isWater ? 'accent-sky-400' : 'accent-yellow-400'
+              }`}
             />
           </div>
         </div>
@@ -660,18 +894,18 @@ export const ComponentNode: React.FC<ComponentNodeProps> = ({
                   cy="18"
                   r="15"
                   fill="#0B111A"
-                  stroke={running ? '#0EA5E9' : manualStop ? '#F59E0B' : '#475569'}
+                  stroke={running ? '#EAB308' : manualStop ? '#F59E0B' : '#475569'}
                   strokeWidth="2"
                 />
                 <g className={running ? 'animate-spin-impeller' : ''} style={{ transformOrigin: '18px 18px' }}>
                   <path
                     d="M18 6 L21 15 L18 18 L15 15 Z M30 18 L21 21 L18 18 L21 15 Z M18 30 L15 21 L18 18 L21 21 Z M6 18 L15 15 L18 18 L15 21 Z"
-                    fill={running ? '#38BDF8' : '#64748B'}
+                    fill={running ? '#FACC15' : '#64748B'}
                   />
                 </g>
               </svg>
               <div className="text-[10px] font-mono space-y-0.5">
-                <div className="text-sky-300">
+                <div className="text-yellow-300">
                   Ano: <span className="font-bold">{Math.round(actualAno)}</span>/{Math.round(nomAno)} L/h
                 </div>
                 <div className="text-emerald-300">
@@ -837,6 +1071,8 @@ export const ComponentNode: React.FC<ComponentNodeProps> = ({
           ? '#64748B'
           : medium === 'katholyte'
           ? '#10B981'
+          : medium === 'anolyte'
+          ? '#EAB308'
           : '#0EA5E9';
 
       return (
@@ -1086,8 +1322,61 @@ export const ComponentNode: React.FC<ComponentNodeProps> = ({
       );
     }
 
+    // 21. AquaForte V-Serie Luftpumpe
+    if (component instanceof AirPumpComponent) {
+      const model = component.getModel();
+      const spec = AIR_PUMP_MODELS[model];
+      const powerMode = component.getPowerMode();
+      const enabled = Boolean(component.params.enabled ?? true);
+      const running = Boolean(component.runtimeState.running);
+      const flowLpm = Number(component.runtimeState.airFlowLpm ?? 0);
+
+      return (
+        <div className="px-3 py-2 flex flex-col justify-between h-[calc(100%-28px)] text-[10.5px]">
+          <div className="flex items-center justify-between gap-2">
+            <div>
+              <div className="font-mono text-xs font-bold text-cyan-300">
+                AquaForte {model}
+              </div>
+              <div className="font-mono text-[10px] text-slate-400">
+                {spec.outputLpm} L/min · {spec.watts}W
+              </div>
+            </div>
+
+            <button
+              type="button"
+              onPointerDown={stopDrag}
+              onClick={(e) => {
+                e.stopPropagation();
+                component.togglePower();
+                onMutateComponent();
+              }}
+              className={`px-2 py-1 rounded text-[10px] font-semibold border cursor-pointer ${
+                enabled
+                  ? 'bg-emerald-500/20 text-emerald-300 border-emerald-500/50 hover:bg-emerald-500/30'
+                  : 'bg-slate-800 text-slate-400 border-slate-600 hover:text-slate-200'
+              }`}
+            >
+              {enabled ? 'EIN' : 'AUS'}
+            </button>
+          </div>
+
+          <div className="flex items-center justify-between bg-[#0B111A] border border-[#1E2A3B] rounded px-2 py-1 font-mono text-[10px]">
+            <span className={running ? 'text-cyan-300 font-bold' : 'text-slate-500'}>
+              {running ? `${flowLpm} L/min aktiv` : '0 L/min'}
+            </span>
+            <span className="text-slate-400">
+              {powerMode === 'external_24v' ? '24V A1' : 'Feststrom'}
+            </span>
+          </div>
+        </div>
+      );
+    }
+
     return <div className="px-3 py-2 text-xs text-slate-400">Bauteil: {component.type}</div>;
   };
+
+  const headerLed = getHeaderGreenLedState(component);
 
   return (
     <div
@@ -1125,6 +1414,17 @@ export const ComponentNode: React.FC<ComponentNodeProps> = ({
           {component.label}
         </span>
 
+        {headerLed.show && (
+          <span
+            title={headerLed.title}
+            className={`w-3.5 h-3.5 rounded-full border shrink-0 transition-all ${
+              headerLed.on
+                ? 'bg-emerald-400 border-emerald-100 shadow-[0_0_12px_3px_rgba(52,211,153,0.95)]'
+                : 'bg-slate-800 border-slate-600'
+            }`}
+          />
+        )}
+
         {hasFault && (
           <span className="text-[9px] font-mono uppercase text-red-300 font-bold shrink-0">
             {faultText}
@@ -1156,6 +1456,10 @@ export const ComponentNode: React.FC<ComponentNodeProps> = ({
           port.domain === 'analog' && sig && (sig as AnalogSignal).active;
         const isFluidActive =
           port.domain === 'fluid' && sig && 'flowRateLph' in sig && sig.flowRateLph > 0;
+        const isAirActive =
+          port.domain === 'air' &&
+          ((component instanceof AirPumpComponent && Boolean(component.runtimeState.running)) ||
+            (component instanceof TankComponent && Boolean(component.runtimeState.aerated)));
 
         const isPendingOrigin =
           pendingWire?.componentId === component.id && pendingWire?.portId === port.id;
@@ -1167,6 +1471,11 @@ export const ComponentNode: React.FC<ComponentNodeProps> = ({
           (component instanceof TankComponent &&
             port.domain === 'fluid' &&
             component.getMedium() === 'katholyte');
+        const isAnoFluidPort =
+          port.id === 'fluid_anolyte' ||
+          (component instanceof TankComponent &&
+            port.domain === 'fluid' &&
+            component.getMedium() === 'anolyte');
 
         return (
           <div
@@ -1203,10 +1512,18 @@ export const ComponentNode: React.FC<ComponentNodeProps> = ({
                     ? isAnalogActive
                       ? 'border-emerald-200 bg-emerald-500 shadow-[0_0_8px_rgba(16,185,129,0.85)]'
                       : 'border-emerald-500/70 bg-[#0B111A] group-hover:border-emerald-300 group-hover:scale-110'
+                    : port.domain === 'air'
+                    ? isAirActive
+                      ? 'border-cyan-200 bg-cyan-500 shadow-[0_0_8px_rgba(6,182,212,0.85)]'
+                      : 'border-cyan-500/70 bg-[#0B111A] group-hover:border-cyan-300 group-hover:scale-110'
                     : isKatFluidPort
                     ? isFluidActive
                       ? 'border-emerald-200 bg-emerald-500 shadow-[0_0_8px_rgba(16,185,129,0.85)]'
                       : 'border-emerald-500/70 bg-[#0B111A] group-hover:border-emerald-300 group-hover:scale-110'
+                    : isAnoFluidPort
+                    ? isFluidActive
+                      ? 'border-yellow-200 bg-yellow-500 shadow-[0_0_8px_rgba(234,179,8,0.85)]'
+                      : 'border-yellow-500/70 bg-[#0B111A] group-hover:border-yellow-300 group-hover:scale-110'
                     : isFluidActive
                     ? 'border-sky-200 bg-sky-500 shadow-[0_0_8px_rgba(14,165,233,0.85)]'
                     : 'border-sky-500/70 bg-[#0B111A] group-hover:border-sky-300 group-hover:scale-110'

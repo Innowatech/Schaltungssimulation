@@ -159,3 +159,177 @@ export class SwitchComponent extends SimComponent {
     this.params.pressed = !Boolean(this.params.pressed);
   }
 }
+
+export class ChangeoverSwitchComponent extends SimComponent {
+  public readonly type = 'changeover_switch';
+  public readonly category: ComponentCategory = 'electric';
+  public readonly width = 180;
+  public readonly height = 114;
+
+  constructor(id: string, label = 'S2 Wechselschalter', x = 0, y = 0) {
+    super(id, label, x, y);
+    this.params = {
+      switched: false, // false => 11->12 (NC), true => 11->14 (NO)
+    };
+    this.runtimeState = {
+      inputEnergized: false,
+      switched: false,
+    };
+  }
+
+  public getPorts(): PortDefinition[] {
+    return [
+      {
+        id: 'com',
+        label: '11 (COM)',
+        description: 'Eingang Gemeinsam (11)',
+        domain: 'electrical',
+        direction: 'input',
+        side: 'left',
+        offsetX: 0,
+        offsetY: 64,
+      },
+      {
+        id: 'nc',
+        label: '12 (NC)',
+        description: 'Öffner-Ausgang 12 (Stellung I)',
+        domain: 'electrical',
+        direction: 'output',
+        side: 'right',
+        offsetX: this.width,
+        offsetY: 44,
+      },
+      {
+        id: 'no',
+        label: '14 (NO)',
+        description: 'Schließer-Ausgang 14 (Stellung II)',
+        domain: 'electrical',
+        direction: 'output',
+        side: 'right',
+        offsetX: this.width,
+        offsetY: 86,
+      },
+    ];
+  }
+
+  public getSupportedFaults(): ComponentFaultType[] {
+    return ['short_circuit'];
+  }
+
+  public isSwitched(): boolean {
+    return Boolean(this.params.switched);
+  }
+
+  public toggle(): void {
+    this.params.switched = !Boolean(this.params.switched);
+  }
+
+  public evaluateElectrical(
+    inputs: Map<string, ElectricalSignal>,
+    _context: SimulationContext
+  ): Map<string, ElectricalSignal> {
+    const comSig = inputs.get('com') ?? ZERO_VOLT;
+    const switched = this.isSwitched();
+
+    this.runtimeState.inputEnergized = comSig.energized;
+    this.runtimeState.switched = switched;
+
+    const outputs = new Map<string, ElectricalSignal>();
+    if (this.fault === 'short_circuit') {
+      outputs.set('nc', ZERO_VOLT);
+      outputs.set('no', ZERO_VOLT);
+      return outputs;
+    }
+
+    const activeSig = comSig.energized
+      ? { ...HIGH_24V, voltage: comSig.voltage }
+      : ZERO_VOLT;
+    outputs.set('nc', !switched ? activeSig : ZERO_VOLT);
+    outputs.set('no', switched ? activeSig : ZERO_VOLT);
+    return outputs;
+  }
+
+  public reset(): void {
+    super.reset();
+    this.runtimeState = {
+      inputEnergized: false,
+      switched: Boolean(this.params.switched),
+    };
+  }
+}
+
+export type IndicatorColor = 'green' | 'red';
+
+export class IndicatorLampComponent extends SimComponent {
+  public readonly type: string;
+  public readonly category: ComponentCategory = 'electric';
+  public readonly width = 148;
+  public readonly height = 104;
+
+  constructor(
+    id: string,
+    label = 'H1 Leuchtmelder',
+    x = 0,
+    y = 0,
+    color: IndicatorColor = 'green'
+  ) {
+    super(id, label, x, y);
+    this.type = color === 'red' ? 'indicator_red' : 'indicator_green';
+    this.params = {
+      color,
+    };
+    this.runtimeState = {
+      lit: false,
+      voltage: 0,
+    };
+  }
+
+  public getColor(): IndicatorColor {
+    return this.params.color === 'red' || this.type === 'indicator_red' ? 'red' : 'green';
+  }
+
+  public getPorts(): PortDefinition[] {
+    return [
+      {
+        id: 'in',
+        label: 'X1 (+24V)',
+        description: 'Einschalteingang +24V DC (0V intern vorausgesetzt)',
+        domain: 'electrical',
+        direction: 'input',
+        side: 'left',
+        offsetX: 0,
+        offsetY: 58,
+      },
+    ];
+  }
+
+  public getSupportedFaults(): ComponentFaultType[] {
+    return ['power_failure', 'short_circuit'];
+  }
+
+  public getElectricalLoadAmps(): number {
+    if (this.fault === 'short_circuit') return 25.0;
+    return this.runtimeState.lit ? 0.08 : 0;
+  }
+
+  public evaluateElectrical(
+    inputs: Map<string, ElectricalSignal>,
+    _context: SimulationContext
+  ): Map<string, ElectricalSignal> {
+    const inSig = inputs.get('in') ?? ZERO_VOLT;
+    const faulted = this.fault === 'power_failure' || this.fault === 'short_circuit';
+    const lit = !faulted && inSig.energized;
+    this.runtimeState.lit = lit;
+    this.runtimeState.voltage = lit ? inSig.voltage : 0;
+    return new Map();
+  }
+
+  public reset(): void {
+    super.reset();
+    this.runtimeState = {
+      lit: false,
+      voltage: 0,
+    };
+  }
+}
+

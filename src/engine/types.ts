@@ -1,4 +1,4 @@
-export type PortDomain = 'electrical' | 'fluid' | 'analog';
+export type PortDomain = 'electrical' | 'fluid' | 'analog' | 'air';
 export type PortDirection = 'input' | 'output';
 export type PortSide = 'left' | 'right' | 'top' | 'bottom';
 export type FluidMedium = 'water' | 'anolyte' | 'katholyte';
@@ -62,7 +62,13 @@ export interface AnalogSignal {
   active: boolean;
 }
 
-export type AnySignal = ElectricalSignal | FluidSignal | AnalogSignal;
+export interface AirSignal {
+  domain: 'air';
+  flowRateLpm: number;
+  active: boolean;
+}
+
+export type AnySignal = ElectricalSignal | FluidSignal | AnalogSignal | AirSignal;
 
 export interface Connection {
   id: string;
@@ -77,6 +83,7 @@ export interface Connection {
   active: boolean;
   voltage?: number;
   flowRateLph?: number;
+  airFlowLpm?: number;
   medium?: FluidMedium;
   analogValue?: number;
   analogUnit?: 'mA' | 'V';

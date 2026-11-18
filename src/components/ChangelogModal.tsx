@@ -66,7 +66,7 @@ export const ChangelogModal: React.FC<ChangelogModalProps> = ({ isOpen, onClose 
 
         <div className="px-5 py-3 border-t border-[#223044] flex items-center justify-between gap-4">
           <span className="text-[11px] font-mono text-slate-400">
-            © 2026 @MAT
+            Copyright © 2026 #MAT
           </span>
           <button
             type="button"

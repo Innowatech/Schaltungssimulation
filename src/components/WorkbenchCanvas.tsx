@@ -11,6 +11,7 @@ import {
   routeAllOrthogonalWires,
 } from '../utils/orthogonalRouting';
 import { ComponentNode, PendingWireStart } from './ComponentNode';
+import { OfflineIndicator } from './OfflineIndicator';
 
 interface WorkbenchCanvasProps {
   theme: 'dark' | 'light';
@@ -467,11 +468,11 @@ export const WorkbenchCanvas: React.FC<WorkbenchCanvasProps> = ({
     return routeAllOrthogonalWires(endpoints, obstacles);
   }, [compMap, connections, obstacles]);
 
-  // Sortiere Render-Reihenfolge: Fluidrohre unten (innerhalb in Verbindungsreihenfolge, sodass spätere Rohre per Option-C Lücke drüberlaufen), dann Analog & Elektrik mit Brückenbögen drüber
+  // Sortiere Render-Reihenfolge: Fluidrohre & Luftschläuche unten, dann Analog & Elektrik mit Brückenbögen drüber
   const orderedConnections = useMemo(() => {
-    const fluids = connections.filter((c) => c.domain === 'fluid');
-    const signals = connections.filter((c) => c.domain !== 'fluid');
-    return [...fluids, ...signals];
+    const fluidsAndAir = connections.filter((c) => c.domain === 'fluid' || c.domain === 'air');
+    const signals = connections.filter((c) => c.domain !== 'fluid' && c.domain !== 'air');
+    return [...fluidsAndAir, ...signals];
   }, [connections]);
 
   let previewPath: string | null = null;
@@ -646,6 +647,8 @@ export const WorkbenchCanvas: React.FC<WorkbenchCanvasProps> = ({
                         ? 'KURZSCHLUSS'
                         : conn.domain === 'fluid'
                         ? 'BLOCKIERT'
+                        : conn.domain === 'air'
+                        ? 'ABGEKNICKT'
                         : 'UNTERBROCHEN'}
                     </text>
                   </g>
@@ -795,13 +798,116 @@ export const WorkbenchCanvas: React.FC<WorkbenchCanvasProps> = ({
               );
             }
 
-            // Fluid-Rohrleitung (Anolyt/Wasser = Blau, Katholyt = Grün) + Option-C Unterbrechungslücke
+            if (conn.domain === 'air') {
+              const airLpm = conn.airFlowLpm ?? 0;
+              const flowingAir = conn.active && airLpm > 0;
+              return (
+                <g
+                  key={conn.id}
+                  onMouseEnter={() => setHoveredConnId(conn.id)}
+                  onMouseLeave={() => setHoveredConnId(null)}
+                  onPointerDown={(e) => e.stopPropagation()}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    onSelectConnection(conn.id);
+                  }}
+                  className="cursor-pointer"
+                >
+                  {gapMasks.map((m, idx) => (
+                    <line
+                      key={idx}
+                      x1={m.x1}
+                      y1={m.y1}
+                      x2={m.x2}
+                      y2={m.y2}
+                      stroke={canvasMaskColor}
+                      strokeWidth={14}
+                      strokeLinecap="butt"
+                    />
+                  ))}
+                  <path d={d} fill="none" stroke="transparent" strokeWidth={16} />
+                  {flowingAir && (
+                    <path
+                      d={d}
+                      fill="none"
+                      stroke="#06B6D4"
+                      strokeOpacity={0.28}
+                      strokeWidth={8}
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                    />
+                  )}
+                  <path
+                    d={d}
+                    fill="none"
+                    stroke={
+                      isSelected
+                        ? '#F59E0B'
+                        : flowingAir
+                        ? '#06B6D4'
+                        : isHovered
+                        ? isLight
+                          ? '#0E7490'
+                          : '#67E8F9'
+                        : isLight
+                        ? '#94A3B8'
+                        : '#334155'
+                    }
+                    strokeWidth={isSelected ? 3.8 : 3}
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                  />
+                  {flowingAir && (
+                    <path
+                      d={d}
+                      fill="none"
+                      stroke="#CFFAFE"
+                      strokeWidth={2}
+                      strokeDasharray="6 14"
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      className="animate-fluid-flow pointer-events-none"
+                    />
+                  )}
+                  {(flowingAir || isSelected || isHovered) && (
+                    <g transform={`translate(${midX}, ${midY})`} className="pointer-events-none">
+                      <rect
+                        x="-30"
+                        y="-10"
+                        width="60"
+                        height="18"
+                        rx="4"
+                        fill={labelBgColor}
+                        fillOpacity={0.94}
+                        stroke={flowingAir ? '#06B6D4' : isLight ? '#CBD5E1' : '#334155'}
+                        strokeWidth="1"
+                      />
+                      <text
+                        x="0"
+                        y="2.5"
+                        textAnchor="middle"
+                        fill={flowingAir ? (isLight ? '#0E7490' : '#67E8F9') : isLight ? '#475569' : '#94A3B8'}
+                        fontSize="9.5"
+                        fontFamily="monospace"
+                        fontWeight="600"
+                      >
+                        {Math.round(airLpm)} L/min
+                      </text>
+                    </g>
+                  )}
+                </g>
+              );
+            }
+
+            // Fluid-Rohrleitung (Anolyt = Gelb, Katholyt = Grün, Wasser = Blau) + Option-C Unterbrechungslücke
             const flowLph = conn.flowRateLph ?? 0;
             const flowing = conn.active && flowLph > 0;
             const isKat = conn.medium === 'katholyte';
-            const baseColor = isKat ? '#10B981' : '#0EA5E9';
-            const pulseColor = isKat ? '#A7F3D0' : '#BAE6FD';
-            const textColor = isKat ? '#6EE7B7' : '#7DD3FC';
+            const isAno = conn.medium === 'anolyte';
+            const baseColor = isKat ? '#10B981' : isAno ? '#EAB308' : '#0EA5E9';
+            const pulseColor = isKat ? '#A7F3D0' : isAno ? '#FEF08A' : '#BAE6FD';
+            const textColor = isKat ? '#6EE7B7' : isAno ? '#FDE047' : '#7DD3FC';
+            const lightTextColor = isKat ? '#047857' : isAno ? '#A16207' : '#0369A1';
 
             return (
               <g
@@ -904,9 +1010,7 @@ export const WorkbenchCanvas: React.FC<WorkbenchCanvasProps> = ({
                       fill={
                         flowing
                           ? isLight
-                            ? isKat
-                              ? '#047857'
-                              : '#0369A1'
+                            ? lightTextColor
                             : textColor
                           : isLight
                           ? '#475569'
@@ -936,9 +1040,11 @@ export const WorkbenchCanvas: React.FC<WorkbenchCanvasProps> = ({
                   ? '#F87171'
                   : pendingWire.domain === 'analog'
                   ? '#34D399'
+                  : pendingWire.domain === 'air'
+                  ? '#22D3EE'
                   : '#38BDF8'
               }
-              strokeWidth={pendingWire.domain === 'fluid' ? 4 : 2.5}
+              strokeWidth={pendingWire.domain === 'fluid' ? 4 : pendingWire.domain === 'air' ? 3 : 2.5}
               strokeDasharray="6 6"
               className="pointer-events-none"
             />
@@ -1024,6 +1130,8 @@ export const WorkbenchCanvas: React.FC<WorkbenchCanvasProps> = ({
               ? 'Elektrische Leitung: Zielklemme oder weiteren Eingang zum Brücken anklicken'
               : pendingWire.domain === 'analog'
               ? 'Analogsignal (4–20mA / 0–10V): Kompatiblen Analogeingang anklicken'
+              : pendingWire.domain === 'air'
+              ? 'Druckluftschlauch (Luftpumpe): Luft-Anschluss am Tank anklicken'
               : 'Fluid-Rohrleitung: Kompatiblen Fluid-Anschluss anklicken'}
           </span>
           <button
@@ -1069,8 +1177,9 @@ export const WorkbenchCanvas: React.FC<WorkbenchCanvasProps> = ({
         </button>
       </div>
 
-      <div className="absolute bottom-3 right-3 px-2.5 py-1 rounded-md bg-[#101826]/90 border border-[#223044] text-[11px] font-mono text-slate-400 select-none pointer-events-none z-20 shadow-sm">
-        © 2026 @MAT
+      <div className="absolute bottom-3 right-3 flex items-center gap-2 px-2.5 py-1 rounded-md bg-[#101826]/90 border border-[#223044] text-[11px] font-mono text-slate-400 select-none z-20 shadow-sm">
+        <OfflineIndicator inline />
+        <span className="pointer-events-none">Copyright © 2026 #MAT</span>
       </div>
     </main>
   );

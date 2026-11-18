@@ -14,6 +14,10 @@ import {
 } from 'lucide-react';
 import { SimComponent } from '../engine/SimComponent';
 import {
+  AIR_PUMP_MODELS,
+  AirPumpComponent,
+  AirPumpModel,
+  AirPumpPowerMode,
   DDA_MODELS,
   DdaModel,
   DdaOperatingMode,
@@ -33,7 +37,14 @@ import {
   TeeMode,
   WaterMeterComponent,
 } from '../engine/components/FluidComponents';
-import { PowerSupply24V, SwitchComponent, SwitchMode } from '../engine/components/PowerAndSwitch';
+import {
+  ChangeoverSwitchComponent,
+  IndicatorColor,
+  IndicatorLampComponent,
+  PowerSupply24V,
+  SwitchComponent,
+  SwitchMode,
+} from '../engine/components/PowerAndSwitch';
 import {
   TELE_FUNCTIONS,
   TELE_TIME_RANGES,
@@ -288,6 +299,8 @@ export const InspectorPanel: React.FC<InspectorPanelProps> = ({
               ? 'Elektrische Leitung'
               : selectedConnection.domain === 'analog'
               ? 'Analoge Signalleitung'
+              : selectedConnection.domain === 'air'
+              ? 'Druckluftschlauch (Luftpumpe)'
               : 'Fluid-Rohrleitung'}
           </h2>
         </div>
@@ -318,6 +331,10 @@ export const InspectorPanel: React.FC<InspectorPanelProps> = ({
               <div className={`font-mono text-sm font-semibold mt-1 ${selectedConnection.active ? 'text-emerald-400' : 'text-slate-400'}`}>
                 {(selectedConnection.analogValue ?? 0).toFixed(2)} {selectedConnection.analogUnit ?? 'mA'}
               </div>
+            ) : selectedConnection.domain === 'air' ? (
+              <div className={`font-mono text-sm font-semibold mt-1 ${selectedConnection.active ? 'text-cyan-400' : 'text-slate-400'}`}>
+                {Math.round(selectedConnection.airFlowLpm ?? 0)} L/min Druckluft
+              </div>
             ) : (
               <div className="space-y-1 mt-1">
                 <div className={`font-mono text-sm font-semibold ${selectedConnection.active ? 'text-sky-400' : 'text-slate-400'}`}>
@@ -329,7 +346,7 @@ export const InspectorPanel: React.FC<InspectorPanelProps> = ({
                     {selectedConnection.medium === 'katholyte'
                       ? 'Katholyt (Grün)'
                       : selectedConnection.medium === 'anolyte'
-                      ? 'Anolyt (Blau)'
+                      ? 'Anolyt (Gelb)'
                       : 'Wasser (Blau)'}
                   </span>
                 </div>
@@ -382,6 +399,8 @@ export const InspectorPanel: React.FC<InspectorPanelProps> = ({
                   ? '✓ Unterbrechung aktiv (Klicken zum Beheben)'
                   : selectedConnection.domain === 'fluid'
                   ? 'Rohrleitung blockieren / unterbrechen'
+                  : selectedConnection.domain === 'air'
+                  ? 'Luftschlauch abknicken / unterbrechen'
                   : 'Leitungsunterbrechung aktivieren'}
               </button>
 
@@ -551,6 +570,47 @@ export const InspectorPanel: React.FC<InspectorPanelProps> = ({
             </div>
           )}
 
+          {selectedComponent instanceof ChangeoverSwitchComponent && (
+            <div className="space-y-3 border-t border-[#223044] pt-4">
+              <div className="flex items-center justify-between">
+                <span className="text-slate-300">Schaltstellung</span>
+                <button
+                  type="button"
+                  onClick={() => {
+                    selectedComponent.toggle();
+                    onMutate();
+                  }}
+                  className={`px-3 py-1 rounded text-xs font-semibold border cursor-pointer ${
+                    selectedComponent.isSwitched()
+                      ? 'bg-emerald-500/20 text-emerald-300 border-emerald-500/50'
+                      : 'bg-sky-500/15 text-sky-300 border-sky-500/40'
+                  }`}
+                >
+                  {selectedComponent.isSwitched() ? 'Stellung II (11 → 14)' : 'Stellung I (11 → 12)'}
+                </button>
+              </div>
+            </div>
+          )}
+
+          {selectedComponent instanceof IndicatorLampComponent && (
+            <div className="space-y-3 border-t border-[#223044] pt-4">
+              <div>
+                <label className="block text-[11px] text-slate-400 mb-1">Leuchtfarbe</label>
+                <select
+                  value={selectedComponent.getColor()}
+                  onChange={(e) => {
+                    selectedComponent.params.color = e.target.value as IndicatorColor;
+                    onMutate();
+                  }}
+                  className="w-full bg-[#0B111A] border border-[#243247] rounded-md px-2.5 py-1.5 text-slate-100 focus:outline-none focus:border-sky-500 cursor-pointer"
+                >
+                  <option value="green">Grün (Betrieb / Geschaltet)</option>
+                  <option value="red">Rot (Störung / Alarm)</option>
+                </select>
+              </div>
+            </div>
+          )}
+
           {/* TELE ENYA E1ZM10 Zeitrelais */}
           {selectedComponent instanceof TimerRelayComponent && (
             <div className="space-y-3 border-t border-[#223044] pt-4">
@@ -648,7 +708,7 @@ export const InspectorPanel: React.FC<InspectorPanelProps> = ({
             </div>
           )}
 
-          {/* Anolyte / Katholyte Tank */}
+          {/* Anolyte / Katholyte / Wasser Tank */}
           {selectedComponent instanceof TankComponent && (
             <div className="space-y-3 border-t border-[#223044] pt-4">
               <div className="grid grid-cols-2 gap-2">
@@ -657,12 +717,16 @@ export const InspectorPanel: React.FC<InspectorPanelProps> = ({
                   <select
                     value={selectedComponent.getMedium()}
                     onChange={(e) => {
-                      selectedComponent.params.medium = e.target.value as FluidMedium;
+                      const nextMedium = e.target.value as FluidMedium;
+                      selectedComponent.params.medium = nextMedium;
+                      if (nextMedium === 'katholyte') {
+                        selectedComponent.params.enableAeration = true;
+                      }
                       onMutate();
                     }}
                     className="w-full bg-[#0B111A] border border-[#243247] rounded-md px-2 py-1.5 text-slate-100 cursor-pointer"
                   >
-                    <option value="anolyte">Anolyt (Blau)</option>
+                    <option value="anolyte">Anolyt (Gelb)</option>
                     <option value="katholyte">Katholyt (Grün)</option>
                     <option value="water">Wasser (Blau)</option>
                   </select>
@@ -686,6 +750,61 @@ export const InspectorPanel: React.FC<InspectorPanelProps> = ({
                   />
                 </div>
               </div>
+
+              <div className="bg-[#141E2E] border border-[#223044] rounded-md p-2.5 space-y-2">
+                <div className="flex items-center justify-between gap-2">
+                  <label className="text-[11px] text-slate-300 font-medium">
+                    Startfüllstand bei Reset (%)
+                  </label>
+                  <input
+                    type="number"
+                    min={0}
+                    max={100}
+                    step={5}
+                    value={Number(selectedComponent.params.initialLevelPct ?? 0)}
+                    onChange={(e) => {
+                      const pct = Math.max(0, Math.min(100, Number(e.target.value) || 0));
+                      selectedComponent.params.initialLevelPct = pct;
+                      onMutate();
+                    }}
+                    className="w-16 bg-[#0B111A] border border-[#243247] rounded px-2 py-1 font-mono text-xs text-slate-100 text-right"
+                  />
+                </div>
+                <div className="grid grid-cols-4 gap-1">
+                  {[0, 25, 50, 100].map((v) => (
+                    <button
+                      key={v}
+                      type="button"
+                      onClick={() => {
+                        selectedComponent.params.initialLevelPct = v;
+                        onMutate();
+                      }}
+                      className={`py-1 rounded text-[10.5px] font-mono border cursor-pointer ${
+                        Number(selectedComponent.params.initialLevelPct ?? 0) === v
+                          ? 'bg-sky-600 text-white border-sky-500'
+                          : 'bg-[#0B111A] text-slate-300 border-[#243247]'
+                      }`}
+                    >
+                      {v}%
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              <label className="flex items-center justify-between text-slate-300 cursor-pointer bg-[#141E2E] border border-[#223044] rounded-md px-2.5 py-2">
+                <span>Belüftungsanschluss (Luftpumpe)</span>
+                <input
+                  type="checkbox"
+                  checked={selectedComponent.isAerationEnabled()}
+                  onChange={(e) => {
+                    selectedComponent.params.enableAeration = e.target.checked;
+                    if (!e.target.checked) {
+                      onPruneComponentPorts(selectedComponent.id);
+                    }
+                    onMutate();
+                  }}
+                />
+              </label>
 
               <div>
                 <label className="block text-[11px] text-slate-400 mb-1">
@@ -925,7 +1044,7 @@ export const InspectorPanel: React.FC<InspectorPanelProps> = ({
 
               <div className="grid grid-cols-2 gap-2">
                 <div>
-                  <label className="block text-[10.5px] text-sky-300 mb-1">Anolyt (L/h)</label>
+                  <label className="block text-[10.5px] text-yellow-300 mb-1">Anolyt (L/h)</label>
                   <input
                     type="number"
                     min={0}
@@ -1353,6 +1472,79 @@ export const InspectorPanel: React.FC<InspectorPanelProps> = ({
             </div>
           )}
 
+          {/* AquaForte V-Serie Luftpumpe */}
+          {selectedComponent instanceof AirPumpComponent && (
+            <div className="space-y-3 border-t border-[#223044] pt-4">
+              <div>
+                <label className="block text-[11px] text-slate-400 mb-1">Modell (AquaForte V-Serie)</label>
+                <select
+                  value={selectedComponent.getModel()}
+                  onChange={(e) => {
+                    selectedComponent.params.model = e.target.value as AirPumpModel;
+                    onMutate();
+                  }}
+                  className="w-full bg-[#0B111A] border border-[#243247] rounded-md px-2.5 py-1.5 text-slate-100 cursor-pointer"
+                >
+                  {(Object.keys(AIR_PUMP_MODELS) as AirPumpModel[]).map((m) => (
+                    <option key={m} value={m}>
+                      {m} ({AIR_PUMP_MODELS[m].outputLpm} L/min · {AIR_PUMP_MODELS[m].watts}W)
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              {(() => {
+                const spec = AIR_PUMP_MODELS[selectedComponent.getModel()];
+                return (
+                  <div className="bg-[#141E2E] border border-[#223044] rounded-md p-2.5 grid grid-cols-2 gap-1.5 text-[10.5px] font-mono">
+                    <div className="text-slate-400">Luftleistung:</div>
+                    <div className="text-cyan-300 text-right font-semibold">{spec.outputLpm} L/min</div>
+                    <div className="text-slate-400">Druck:</div>
+                    <div className="text-slate-200 text-right">{spec.pressureMpa}</div>
+                    <div className="text-slate-400">Leistung:</div>
+                    <div className="text-slate-200 text-right">{spec.watts} W</div>
+                    <div className="text-slate-400">Geräusch:</div>
+                    <div className="text-slate-200 text-right">{spec.noiseDb}</div>
+                  </div>
+                );
+              })()}
+
+              <div>
+                <label className="block text-[11px] text-slate-400 mb-1">Stromversorgung / Steuerung</label>
+                <select
+                  value={selectedComponent.getPowerMode()}
+                  onChange={(e) => {
+                    selectedComponent.params.powerMode = e.target.value as AirPumpPowerMode;
+                    onPruneComponentPorts(selectedComponent.id);
+                    onMutate();
+                  }}
+                  className="w-full bg-[#0B111A] border border-[#243247] rounded-md px-2.5 py-1.5 text-slate-100 cursor-pointer"
+                >
+                  <option value="fixed_power">Fester Stromanschluss (Dauerbetrieb)</option>
+                  <option value="external_24v">Externes +24V Steuersignal (Klemme A1)</option>
+                </select>
+              </div>
+
+              <div className="flex items-center justify-between">
+                <span className="text-slate-300">Pumpenschalter</span>
+                <button
+                  type="button"
+                  onClick={() => {
+                    selectedComponent.togglePower();
+                    onMutate();
+                  }}
+                  className={`px-3 py-1 rounded text-xs font-semibold border cursor-pointer ${
+                    Boolean(selectedComponent.params.enabled ?? true)
+                      ? 'bg-emerald-500/20 text-emerald-300 border-emerald-500/50'
+                      : 'bg-slate-800 text-slate-400 border-slate-600'
+                  }`}
+                >
+                  {Boolean(selectedComponent.params.enabled ?? true) ? 'EIN' : 'AUS'}
+                </button>
+              </div>
+            </div>
+          )}
+
           {/* Impfstelle */}
           {selectedComponent instanceof InjectionPointComponent && (
             <div className="space-y-2 border-t border-[#223044] pt-4 bg-[#141E2E] rounded p-2.5">
@@ -1502,6 +1694,15 @@ export const InspectorPanel: React.FC<InspectorPanelProps> = ({
                   const flow = fSig?.flowRateLph ?? 0;
                   valText = `${Math.round(flow)} L/h`;
                   valColor = flow > 0 ? 'text-sky-400 font-semibold' : 'text-slate-500';
+                } else if (p.domain === 'air') {
+                  const airLpm =
+                    selectedComponent instanceof AirPumpComponent
+                      ? Number(selectedComponent.runtimeState.airFlowLpm ?? 0)
+                      : selectedComponent instanceof TankComponent
+                      ? Number(selectedComponent.runtimeState.airFlowLpm ?? 0)
+                      : 0;
+                  valText = `${Math.round(airLpm)} L/min`;
+                  valColor = airLpm > 0 ? 'text-cyan-400 font-semibold' : 'text-slate-500';
                 }
 
                 const portConns = attachedConnections.filter(
@@ -1703,7 +1904,9 @@ export const InspectorPanel: React.FC<InspectorPanelProps> = ({
             <div className="space-y-2">
               {tanks.map((tank) => {
                 const pct = tank.getLevelPercent();
-                const isKat = tank.getMedium() === 'katholyte';
+                const med = tank.getMedium();
+                const isKat = med === 'katholyte';
+                const isAno = med === 'anolyte';
                 return (
                   <div
                     key={tank.id}
@@ -1712,13 +1915,19 @@ export const InspectorPanel: React.FC<InspectorPanelProps> = ({
                   >
                     <div className="flex justify-between items-center">
                       <span className="font-medium text-slate-200 truncate">{tank.label}</span>
-                      <span className={`font-mono ${isKat ? 'text-emerald-400' : 'text-sky-400'}`}>
+                      <span
+                        className={`font-mono ${
+                          isKat ? 'text-emerald-400' : isAno ? 'text-yellow-400' : 'text-sky-400'
+                        }`}
+                      >
                         {pct.toFixed(1)}%
                       </span>
                     </div>
                     <div className="h-1.5 bg-[#0B111A] rounded-full overflow-hidden">
                       <div
-                        className={`h-full ${isKat ? 'bg-emerald-500' : 'bg-sky-500'}`}
+                        className={`h-full ${
+                          isKat ? 'bg-emerald-500' : isAno ? 'bg-yellow-500' : 'bg-sky-500'
+                        }`}
                         style={{ width: `${Math.max(0, Math.min(100, pct))}%` }}
                       />
                     </div>

@@ -3,7 +3,6 @@ import { PanelLeftOpen, PanelRightOpen } from 'lucide-react';
 import { ChangelogModal } from './components/ChangelogModal';
 import { ComponentLibrary } from './components/ComponentLibrary';
 import { InspectorPanel } from './components/InspectorPanel';
-import { OfflineIndicator } from './components/OfflineIndicator';
 import { PdfReferencePanel } from './components/PdfReferencePanel';
 import { TopControlBar } from './components/TopControlBar';
 import { WorkbenchCanvas } from './components/WorkbenchCanvas';
@@ -693,7 +692,6 @@ export default function App() {
           {toastMessage}
         </div>
       )}
-      <OfflineIndicator />
       <ChangelogModal
         isOpen={showChangelog}
         onClose={() => setShowChangelog(false)}

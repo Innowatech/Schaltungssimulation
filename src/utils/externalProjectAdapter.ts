@@ -64,8 +64,9 @@ export function parseExternalProjectJson(rawText: string): SerializedCircuit | n
           const lit = Number(item.capacity_liters || 160);
           defaultParams = {
             capacityLiters: lit,
-            currentLiters: lit / 2,
-            medium: 'anolyte',
+            initialLevelPct: Number(item.initial_level_pct ?? 0),
+            medium: 'katholyte',
+            enableAeration: true,
           };
           label = `Tank ${extId}`;
         }

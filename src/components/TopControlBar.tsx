@@ -15,6 +15,7 @@ import {
   Pause,
   Play,
   RotateCcw,
+  Settings,
   ShieldCheck,
   StepForward,
   Sun,
@@ -152,14 +153,24 @@ export const TopControlBar: React.FC<TopControlBarProps> = ({
   const scrollContainerRef = useRef<HTMLDivElement>(null);
   const jumpBtnRef = useRef<HTMLButtonElement>(null);
   const jumpPopoverRef = useRef<HTMLDivElement>(null);
+  const settingsBtnRef = useRef<HTMLButtonElement>(null);
+  const settingsPopoverRef = useRef<HTMLDivElement>(null);
 
   const [isSavingNamed, setIsSavingNamed] = useState(false);
   const [saveNameDraft, setSaveNameDraft] = useState('');
   const [confirmDeleteSavedId, setConfirmDeleteSavedId] = useState<string | null>(null);
+  const [confirmMenuDeleteId, setConfirmMenuDeleteId] = useState<string | null>(null);
 
   // Horizontal overflow scroll arrows
   const [canScrollLeft, setCanScrollLeft] = useState(false);
   const [canScrollRight, setCanScrollRight] = useState(false);
+
+  // Zahnrad-Menü (Settings Popover)
+  const [showSettingsMenu, setShowSettingsMenu] = useState(false);
+  const [settingsPopoverPos, setSettingsPopoverPos] = useState<{ top: number; left: number }>({
+    top: 60,
+    left: 200,
+  });
 
   // Zeitsprung popover
   const [showJumpPopover, setShowJumpPopover] = useState(false);
@@ -205,26 +216,35 @@ export const TopControlBar: React.FC<TopControlBarProps> = ({
   }, [activeCircuitId]);
 
   useEffect(() => {
-    if (!showJumpPopover) return;
+    if (!showJumpPopover && !showSettingsMenu) return;
     const onPointerDown = (e: MouseEvent) => {
       const target = e.target as Node;
       if (
-        jumpPopoverRef.current?.contains(target) ||
-        jumpBtnRef.current?.contains(target)
+        showJumpPopover &&
+        !jumpPopoverRef.current?.contains(target) &&
+        !jumpBtnRef.current?.contains(target)
       ) {
-        return;
+        setShowJumpPopover(false);
       }
-      setShowJumpPopover(false);
+      if (
+        showSettingsMenu &&
+        !settingsPopoverRef.current?.contains(target) &&
+        !settingsBtnRef.current?.contains(target)
+      ) {
+        setShowSettingsMenu(false);
+        setConfirmMenuDeleteId(null);
+      }
     };
     window.addEventListener('mousedown', onPointerDown);
     return () => window.removeEventListener('mousedown', onPointerDown);
-  }, [showJumpPopover]);
+  }, [showJumpPopover, showSettingsMenu]);
 
   const openJumpPopover = () => {
     if (showJumpPopover) {
       setShowJumpPopover(false);
       return;
     }
+    setShowSettingsMenu(false);
     const rect = jumpBtnRef.current?.getBoundingClientRect();
     if (rect) {
       const popWidth = 320;
@@ -238,6 +258,28 @@ export const TopControlBar: React.FC<TopControlBarProps> = ({
       });
     }
     setShowJumpPopover(true);
+  };
+
+  const openSettingsMenu = () => {
+    if (showSettingsMenu) {
+      setShowSettingsMenu(false);
+      setConfirmMenuDeleteId(null);
+      return;
+    }
+    setShowJumpPopover(false);
+    const rect = settingsBtnRef.current?.getBoundingClientRect();
+    if (rect) {
+      const popWidth = 310;
+      const clampedLeft = Math.max(
+        12,
+        Math.min(window.innerWidth - popWidth - 12, rect.right - popWidth)
+      );
+      setSettingsPopoverPos({
+        top: rect.bottom + 8,
+        left: clampedLeft,
+      });
+    }
+    setShowSettingsMenu(true);
   };
 
   const handleJsonFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -323,8 +365,8 @@ export const TopControlBar: React.FC<TopControlBarProps> = ({
       >
         {/* Zone 1: Titel, Version & Gespeicherte Simulationen */}
         <div className="flex items-center gap-2 min-w-0 shrink-0">
-          <h1 className="text-sm font-semibold tracking-tight text-slate-100 whitespace-nowrap shrink-0">
-            Mechatronik &amp; Fluidik
+          <h1 className="text-sm font-bold tracking-tight text-slate-100 whitespace-nowrap shrink-0">
+            AnlagenSim
           </h1>
 
           <button
@@ -578,74 +620,19 @@ export const TopControlBar: React.FC<TopControlBarProps> = ({
           <div className="h-5 w-px bg-[#223044] mx-0.5" />
 
           <button
+            ref={settingsBtnRef}
             type="button"
-            onClick={() => pdfInputRef.current?.click()}
-            title="PDF- oder Bild-Schaltplan lokal als Referenz öffnen"
-            className="inline-flex items-center gap-1 px-2 py-1.5 rounded-md text-xs font-medium text-amber-200 bg-[#162133] border border-[#243247] hover:border-amber-500/50 hover:bg-[#1D2B42] transition-colors whitespace-nowrap cursor-pointer"
+            onClick={openSettingsMenu}
+            title="Einstellungen, Pläne, Import/Export & Design"
+            aria-label="Zahnrad-Menü öffnen"
+            className={`inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-md text-xs font-medium border transition-colors whitespace-nowrap cursor-pointer ${
+              showSettingsMenu
+                ? 'bg-sky-600 text-white border-sky-500'
+                : 'bg-[#162133] text-slate-200 border-[#243247] hover:border-sky-500/60 hover:bg-[#1D2B42]'
+            }`}
           >
-            <FileText className="w-3.5 h-3.5 text-amber-400" />
-            <span>PDF-Plan</span>
-          </button>
-
-          {hasPdfLoaded && (
-            <button
-              type="button"
-              onClick={onTogglePdfPanel}
-              title={showPdfPanel ? 'Schaltplan-Referenz ausblenden' : 'Schaltplan-Referenz einblenden'}
-              className={`px-2 py-1.5 rounded-md text-xs font-medium border transition-colors whitespace-nowrap cursor-pointer ${
-                showPdfPanel
-                  ? 'bg-amber-600 text-white border-amber-500'
-                  : 'bg-[#162133] text-amber-300 border-amber-500/40 hover:bg-[#1D2B42]'
-              }`}
-            >
-              {showPdfPanel ? 'Plan aus' : 'Plan ein'}
-            </button>
-          )}
-
-          <button
-            type="button"
-            onClick={onExportJson}
-            title="Schaltplan als JSON-Datei exportieren"
-            className="inline-flex items-center gap-1 px-2 py-1.5 rounded-md text-xs font-medium text-slate-200 bg-[#162133] border border-[#243247] hover:bg-[#1D2B42] transition-colors whitespace-nowrap cursor-pointer"
-          >
-            <Download className="w-3.5 h-3.5 text-sky-400" />
-            <span className="hidden xl:inline">Export</span>
-          </button>
-
-          <button
-            type="button"
-            onClick={() => jsonInputRef.current?.click()}
-            title="Schaltplan aus JSON-Datei laden"
-            className="inline-flex items-center gap-1 px-2 py-1.5 rounded-md text-xs font-medium text-slate-200 bg-[#162133] border border-[#243247] hover:bg-[#1D2B42] transition-colors whitespace-nowrap cursor-pointer"
-          >
-            <Upload className="w-3.5 h-3.5 text-sky-400" />
-            <span className="hidden xl:inline">Import</span>
-          </button>
-
-          <PWAInstallButton />
-
-          <button
-            type="button"
-            onClick={onToggleTheme}
-            title={isLight ? 'Auf dunkle Oberfläche umschalten' : 'Auf helle Oberfläche umschalten'}
-            aria-label={isLight ? 'Auf dunkle Oberfläche umschalten' : 'Auf helle Oberfläche umschalten'}
-            className="inline-flex items-center gap-1 px-2 py-1.5 rounded-md text-xs font-medium text-slate-200 bg-[#162133] border border-[#243247] hover:bg-[#1D2B42] transition-colors whitespace-nowrap cursor-pointer"
-          >
-            {isLight ? (
-              <Moon className="w-3.5 h-3.5 text-sky-400" />
-            ) : (
-              <Sun className="w-3.5 h-3.5 text-amber-300" />
-            )}
-            <span className="hidden xl:inline">{isLight ? 'Dunkel' : 'Hell'}</span>
-          </button>
-
-          <button
-            type="button"
-            onClick={onResetView}
-            title="Ansicht zentrieren"
-            className="inline-flex items-center p-1.5 rounded-md text-xs text-slate-300 bg-[#162133] border border-[#243247] hover:bg-[#1D2B42] transition-colors whitespace-nowrap cursor-pointer"
-          >
-            <Maximize2 className="w-3.5 h-3.5" />
+            <Settings className="w-3.5 h-3.5 text-sky-400" />
+            <span className="hidden sm:inline">Menü</span>
           </button>
 
           <input
@@ -858,6 +845,228 @@ export const TopControlBar: React.FC<TopControlBarProps> = ({
                 Auf Zielzeit
               </button>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* Zahnrad-Menü Popover (Pläne, Import/Export, PDF, Design, Ansicht) */}
+      {showSettingsMenu && (
+        <div
+          ref={settingsPopoverRef}
+          style={{ top: `${settingsPopoverPos.top}px`, left: `${settingsPopoverPos.left}px` }}
+          className="fixed w-[310px] max-h-[82vh] overflow-y-auto bg-[#101826] border border-[#26364D] rounded-lg shadow-2xl p-3.5 z-50 space-y-3"
+        >
+          <div className="flex items-center justify-between border-b border-[#223044] pb-2">
+            <div className="flex items-center gap-1.5">
+              <Settings className="w-3.5 h-3.5 text-sky-400" />
+              <span className="text-xs font-semibold text-slate-100">
+                Einstellungen &amp; Pläne
+              </span>
+            </div>
+            <button
+              type="button"
+              onClick={() => {
+                setShowSettingsMenu(false);
+                setConfirmMenuDeleteId(null);
+              }}
+              className="p-0.5 rounded text-slate-400 hover:text-white cursor-pointer"
+            >
+              <X className="w-3.5 h-3.5" />
+            </button>
+          </div>
+
+          {/* Darstellung & Ansicht */}
+          <div className="space-y-1.5">
+            <div className="text-[10.5px] font-semibold text-slate-400">
+              Oberfläche &amp; Ansicht
+            </div>
+            <div className="grid grid-cols-2 gap-1.5">
+              <button
+                type="button"
+                onClick={onToggleTheme}
+                className="inline-flex items-center justify-center gap-1.5 px-2.5 py-1.5 rounded-md text-xs font-medium text-slate-200 bg-[#162133] border border-[#243247] hover:bg-[#1D2B42] transition-colors cursor-pointer"
+              >
+                {isLight ? (
+                  <Moon className="w-3.5 h-3.5 text-sky-400" />
+                ) : (
+                  <Sun className="w-3.5 h-3.5 text-amber-300" />
+                )}
+                <span>{isLight ? 'Dunkel-Modus' : 'Hell-Modus'}</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => {
+                  onResetView();
+                  setShowSettingsMenu(false);
+                }}
+                className="inline-flex items-center justify-center gap-1.5 px-2.5 py-1.5 rounded-md text-xs font-medium text-slate-200 bg-[#162133] border border-[#243247] hover:bg-[#1D2B42] transition-colors cursor-pointer"
+              >
+                <Maximize2 className="w-3.5 h-3.5 text-sky-400" />
+                <span>Ansicht zentr.</span>
+              </button>
+            </div>
+          </div>
+
+          {/* JSON Dateien & PDF-Plan */}
+          <div className="space-y-1.5 border-t border-[#223044] pt-2.5">
+            <div className="text-[10.5px] font-semibold text-slate-400">
+              Schaltplan-Dateien &amp; Referenz
+            </div>
+            <div className="grid grid-cols-2 gap-1.5">
+              <button
+                type="button"
+                onClick={() => {
+                  jsonInputRef.current?.click();
+                  setShowSettingsMenu(false);
+                }}
+                className="inline-flex items-center justify-center gap-1.5 px-2.5 py-1.5 rounded-md text-xs font-medium text-slate-200 bg-[#162133] border border-[#243247] hover:bg-[#1D2B42] transition-colors cursor-pointer"
+              >
+                <Upload className="w-3.5 h-3.5 text-sky-400" />
+                <span>JSON Laden</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => {
+                  onExportJson();
+                  setShowSettingsMenu(false);
+                }}
+                className="inline-flex items-center justify-center gap-1.5 px-2.5 py-1.5 rounded-md text-xs font-medium text-slate-200 bg-[#162133] border border-[#243247] hover:bg-[#1D2B42] transition-colors cursor-pointer"
+              >
+                <Download className="w-3.5 h-3.5 text-sky-400" />
+                <span>JSON Speichern</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => {
+                  pdfInputRef.current?.click();
+                  setShowSettingsMenu(false);
+                }}
+                className="inline-flex items-center justify-center gap-1.5 px-2.5 py-1.5 rounded-md text-xs font-medium text-amber-200 bg-[#162133] border border-[#243247] hover:border-amber-500/50 hover:bg-[#1D2B42] transition-colors cursor-pointer"
+              >
+                <FileText className="w-3.5 h-3.5 text-amber-400" />
+                <span>PDF-Plan laden</span>
+              </button>
+
+              {hasPdfLoaded ? (
+                <button
+                  type="button"
+                  onClick={() => {
+                    onTogglePdfPanel();
+                    setShowSettingsMenu(false);
+                  }}
+                  className={`inline-flex items-center justify-center gap-1.5 px-2.5 py-1.5 rounded-md text-xs font-medium border transition-colors cursor-pointer ${
+                    showPdfPanel
+                      ? 'bg-amber-600 text-white border-amber-500'
+                      : 'bg-[#162133] text-amber-300 border-amber-500/40 hover:bg-[#1D2B42]'
+                  }`}
+                >
+                  <span>{showPdfPanel ? 'PDF ausblenden' : 'PDF einblenden'}</span>
+                </button>
+              ) : (
+                <button
+                  type="button"
+                  onClick={() => {
+                    onOpenChangelog();
+                    setShowSettingsMenu(false);
+                  }}
+                  className="inline-flex items-center justify-center gap-1.5 px-2.5 py-1.5 rounded-md text-xs font-medium text-slate-200 bg-[#162133] border border-[#243247] hover:bg-[#1D2B42] transition-colors cursor-pointer"
+                >
+                  <History className="w-3.5 h-3.5 text-sky-400" />
+                  <span>Changelog</span>
+                </button>
+              )}
+            </div>
+          </div>
+
+          {/* Gespeicherte Pläne im Dropdown verwalten & direkt löschen */}
+          <div className="space-y-1.5 border-t border-[#223044] pt-2.5">
+            <div className="flex items-center justify-between text-[10.5px] font-semibold text-slate-400">
+              <span>Gespeicherte Pläne ({savedSimulations.length})</span>
+            </div>
+            {savedSimulations.length === 0 ? (
+              <div className="text-[11px] text-slate-500 bg-[#0B111A] border border-[#223044] rounded px-2.5 py-2">
+                Noch keine Pläne lokal gespeichert.
+              </div>
+            ) : (
+              <div className="max-h-40 overflow-y-auto space-y-1 pr-0.5">
+                {savedSimulations.map((sim) => {
+                  const isActive = sim.id === activeCircuitId;
+                  const isConfirming = confirmMenuDeleteId === sim.id;
+                  return (
+                    <div
+                      key={sim.id}
+                      className={`flex items-center justify-between gap-1.5 rounded px-2 py-1.5 border text-xs ${
+                        isActive
+                          ? 'bg-sky-500/10 border-sky-500/40 text-sky-200'
+                          : 'bg-[#0B111A] border-[#223044] text-slate-200'
+                      }`}
+                    >
+                      <button
+                        type="button"
+                        onClick={() => {
+                          onSelectCircuit(sim.id);
+                          setShowSettingsMenu(false);
+                        }}
+                        className="truncate text-left flex-1 hover:text-sky-300 cursor-pointer font-medium"
+                        title="Diesen Plan laden"
+                      >
+                        {sim.name}
+                      </button>
+
+                      {isConfirming ? (
+                        <div className="flex items-center gap-1 shrink-0">
+                          <button
+                            type="button"
+                            onClick={() => {
+                              onDeleteSavedSimulation(sim.id);
+                              setConfirmMenuDeleteId(null);
+                            }}
+                            className="px-1.5 py-0.5 rounded bg-red-600 text-white text-[10px] font-semibold cursor-pointer"
+                          >
+                            Ja
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => setConfirmMenuDeleteId(null)}
+                            className="px-1.5 py-0.5 rounded bg-slate-700 text-slate-200 text-[10px] cursor-pointer"
+                          >
+                            Nein
+                          </button>
+                        </div>
+                      ) : (
+                        <button
+                          type="button"
+                          onClick={() => setConfirmMenuDeleteId(sim.id)}
+                          title={`"${sim.name}" aus Liste löschen`}
+                          className="p-1 rounded text-slate-400 hover:text-red-400 hover:bg-red-500/15 transition-colors cursor-pointer shrink-0"
+                        >
+                          <Trash2 className="w-3.5 h-3.5" />
+                        </button>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+
+          {/* App Installation & Info */}
+          <div className="flex items-center justify-between gap-2 border-t border-[#223044] pt-2.5">
+            <PWAInstallButton />
+            <button
+              type="button"
+              onClick={() => {
+                onOpenChangelog();
+                setShowSettingsMenu(false);
+              }}
+              className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-md text-xs font-medium text-sky-300 bg-[#162133] border border-[#243247] hover:bg-[#1D2B42] cursor-pointer ml-auto"
+            >
+              <History className="w-3.5 h-3.5" />
+              <span>v{CURRENT_VERSION} Historie</span>
+            </button>
           </div>
         </div>
       )}

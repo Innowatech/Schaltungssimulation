@@ -1,8 +1,17 @@
-# Changelog — Mechatronik & Fluidik Baukasten
+# Changelog — AnlagenSim (Mechatronik & Fluidik Baukasten)
 
-Alle Änderungen an diesem Projekt werden fortlaufend mit den Versionsnummern `1.0`, `1.1`, `1.2`, `1.3`, `1.4`, `1.5`, `1.6`, `1.7`, `1.8`, `1.9`, `1.10`, `1.11`, `1.12`, `1.13`, `1.14`, `1.15`, `1.16` usw. dokumentiert.
+Alle Änderungen an diesem Projekt werden fortlaufend mit den Versionsnummern `1.0` bis `1.17` usw. dokumentiert.
 
-## [1.16] — Aktuelle Version
+## [1.17] — Aktuelle Version
+### Hinzugefügt & Verbessert
+- **Kopfleiste („AnlagenSim“) & Zahnrad-Menü**: Titel gekürzt; gespeicherte Pläne direkt aus der Liste löschen oder laden, JSON-Import/-Export, PDF-Plan, Hell/Dunkel-Design, Ansicht zentrieren und App-Installation im neuen Zahnrad-Menü gebündelt.
+- **Offline-Hinweis & Copyright**: Kompakter `Offline`-Badge neben `Copyright © 2026 #MAT` unten rechts (überdeckt nicht mehr die Zoom-Buttons).
+- **Tank-Startfüllstand bei Reset & Zeitraffer-Fix**: Konfigurierbarer Startfüllstand für Reset (Standard `0%`), und die CSS-Höhenverzögerung wurde entfernt, damit sich die Tank-Visualisierung auch bei maximalem Zeitraffer absolut flüssig mit den Litern bewegt.
+- **Große grüne Signalleuchten**: Alle schaltenden und elektrisch angesteuerten Bausteine zeigen nun eine helle, deutlich sichtbare grüne Status-LED.
+- **Neue Bauteile**: **Leuchtmelder (Grün / Rot)** mit `+24V`-Eingang, **Wechselschalter (11 → 12/14)** sowie **AquaForte V-Serie Luftpumpe (`V-10`, `V-20`, `V-30`, `V-60`)** mit Cyan-Luftschlauch und animierter Sprudel-Belüftung im Tank.
+- **Medium-Farbschema aktualisiert**: **Anolyt = Gelb**, **Katholyt = Grün**, **Wasser = Blau**, **Druckluft = Cyan**.
+
+## [1.16]
 ### Hinzugefügt & Verbessert
 - **Hell-/Dunkel-Umschaltung**: Über den Button in der oberen Leiste lässt sich die gesamte Oberfläche inkl. Arbeitsfläche, Bauteilen, Leitungen und Seitenleisten zwischen Dunkel- und Hell-Modus umschalten.
 - **Proportionaler Zeitsprung („Sprung“ neben Zeit-Anzeige)**: Ermöglicht das direkte Vorspulen um feste Zeitspannen (`+1 Min` bis `+24 Std`) oder direkt auf eine Zielzeit (z. B. `23:30`). Füllstände, Zeitrelais und Schaltzustände werden dabei ereignisgenau proportional mitberechnet und lassen sich danach nahtlos mit dem Zeitraffer weiterführen.

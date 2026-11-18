@@ -5,9 +5,22 @@ export interface ChangelogEntry {
   changes: string[];
 }
 
-export const CURRENT_VERSION = '1.16';
+export const CURRENT_VERSION = '1.17';
 
 export const CHANGELOG_ENTRIES: ChangelogEntry[] = [
+  {
+    version: '1.17',
+    title: 'AnlagenSim Zahnrad-Menü, AquaForte Luftpumpen, Leuchtmelder, Wechselschalter & Signalleuchten',
+    date: '2026-11-18',
+    changes: [
+      'Kopfleiste verschlankt & Zahnrad-Menü: Titel auf „AnlagenSim“ gekürzt; Pläne verwalten/löschen, JSON-Import/Export, PDF-Plan, Hell-/Dunkel-Modus, Ansicht-Zentrierung & App-Installation übersichtlich im neuen Zahnrad-Menü gebündelt.',
+      'Offline-Hinweis & Copyright: Kompakter Offline-Status sitzt nun dezent neben „Copyright © 2026 #MAT“ rechts unten ohne die Zoom-Tasten zu verdecken.',
+      'Startfüllstand bei Reset & Zeitraffer-Fix: Tanks starten nach Reset auf dem konfigurierbaren Startfüllstand (Standard 0% leer) und aktualisieren die Balkenfüllung im Zeitraffer ohne Verzögerung in Echtzeit.',
+      'Helle grüne Schalt-Signalleuchten: Alle schaltenden und elektrisch angesteuerten Bauteile (Schalter, Zeitrelais, Schütz, Logikgatter, Magnetventile, Pumpen, Verbraucher) zeigen nun eine große, hell leuchtende grüne Status-LED.',
+      'Neue Bauteile: Leuchtmelder (Grün/Rot) für schnelle Elektroschaltungstests, Wechselschalter (11 → 12/14) sowie AquaForte V-Serie Luftpumpe (V-10, V-20, V-30, V-60 nach Handbuch) mit Druckluftschlauch und animierten Sprudelblasen im Tank (Standard für Katholyt-Tanks).',
+      'Neue Mediumfarben: Anolyt = Gelb, Katholyt = Grün, Wasser = Blau, Druckluft = Cyan.',
+    ],
+  },
   {
     version: '1.16',
     title: 'Hell/Dunkel-Design, Zeitsprung-Simulation, 5%-Mausrad-Zoom & UI-Feinschliff',
